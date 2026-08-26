@@ -1,48 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Explore Essence | Home</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Home | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
 <body>
-  <%- include('../partials/header') %>
-  
-  <main>
-    <section class="hero">
-      <div class="container">
-        <div class="hero-content">
-          <h1>Discover <span class="gold">Essence</span></h1>
-          <p>Curated premium goods for those who appreciate quality.</p>
-          <a href="/products" class="btn btn-primary btn-large">Explore Collection</a>
-        </div>
-      </div>
-    </section>
-
-    <section class="featured-products">
-      <div class="container">
-        <h2 class="section-title">Featured <span class="gold">Products</span></h2>
-        <div class="product-grid">
-          <% products.forEach(product => { %>
-            <div class="product-card">
-              <div class="product-image">
-                <img src="/images/<%= product.image_url %>" alt="<%= product.name %>" onerror="this.src='/images/placeholder.jpg'">
-              </div>
-              <div class="product-info">
-                <h3><%= product.name %></h3>
-                <p class="price">R <%= product.price.toFixed(2) %></p>
-                <a href="/product/<%= product.id %>" class="btn">View Details</a>
-              </div>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Discover <span class="gold">Essence</span></h1>
+                <p>Premium curated goods for the discerning soul.</p>
+                <a href="/products" class="btn btn-primary">Explore Collection</a>
             </div>
-          <% }) %>
-        </div>
-      </div>
-    </section>
-  </main>
+        </section>
 
-  <%- include('../partials/footer') %>
+        <section class="featured">
+            <div class="container">
+                <h2 class="section-title">Featured <span class="gold">Products</span></h2>
+                <div class="product-grid" id="productGrid">
+                    <!-- Products loaded by JavaScript -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
 </body>
 </html>

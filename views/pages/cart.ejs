@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Cart | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        .page-title {
+            font-size: 2.5rem;
+            margin: 40px 0;
+            text-align: center;
+            color: #FFFFFF;
+        }
+        .cart-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+        .cart-items {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .cart-item {
+            display: flex;
+            gap: 20px;
+            background: #1A1A1A;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #2D2D2D;
+            align-items: center;
+        }
+        .cart-item img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .cart-item-info {
+            flex: 1;
+        }
+        .cart-item-info h3 {
+            color: #FFFFFF;
+            font-size: 1.1rem;
+        }
+        .cart-item-info .price {
+            color: #D4AF37;
+            font-weight: 600;
+        }
+        .cart-summary {
+            background: #1A1A1A;
+            padding: 25px;
+            border-radius: 10px;
+            border: 1px solid #2D2D2D;
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+        .cart-summary h2 {
+            color: #D4AF37;
+            margin-bottom: 20px;
+        }
+        .cart-summary p {
+            color: #CCCCCC;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+        .cart-summary p strong {
+            color: #D4AF37;
+            font-size: 1.3rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+            font-size: 1.2rem;
+        }
+        .empty-state a {
+            color: #D4AF37;
+            text-decoration: none;
+        }
+        .empty-state a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 768px) {
+            .cart-grid {
+                grid-template-columns: 1fr;
+            }
+            .cart-item {
+                flex-wrap: wrap;
+            }
+            .cart-item img {
+                width: 60px;
+                height: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="container">
+            <h1 class="page-title">Your <span class="gold">Cart</span></h1>
+            
+            <% if (locals.items && locals.items.length > 0) { %>
+                <div class="cart-grid">
+                    <div class="cart-items">
+                        <% locals.items.forEach(item => { %>
+                            <div class="cart-item">
+                                <img src="/images/<%= item.image_url || 'placeholder.jpg' %>" 
+                                     alt="<%= item.name %>" 
+                                     onerror="this.src='/images/placeholder.jpg'">
+                                <div class="cart-item-info">
+                                    <h3><%= item.name %></h3>
+                                    <p class="price">R <%= item.price.toFixed(2) %></p>
+                                    <p style="color: #888; font-size: 0.9rem;">Quantity: <%= item.quantity %></p>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                    <div class="cart-summary">
+                        <h2>Order Summary</h2>
+                        <p>Total: <strong>R <%= locals.total %></strong></p>
+                        <p style="color: #888; font-size: 0.9rem;">Items: <%= locals.items.length %></p>
+                        <form action="/api/checkout" method="POST" id="checkoutForm">
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label for="shipping_address" style="color: #CCCCCC; display: block; margin-bottom: 5px;">Shipping Address</label>
+                                <input type="text" id="shipping_address" name="shipping_address" 
+                                       placeholder="123 Main St, Cape Town" required
+                                       style="width: 100%; padding: 10px; background: #0D0D0D; border: 2px solid #2D2D2D; border-radius: 8px; color: #FFFFFF;">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">Place Order</button>
+                        </form>
+                    </div>
+                </div>
+            <% } else { %>
+                <p class="empty-state">🛒 Your cart is empty. <a href="/products">Start shopping</a></p>
+            <% } %>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('checkoutForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                return;
+            }
+
+            const shipping_address = document.getElementById('shipping_address').value;
+
+            try {
+                const response = await fetch('/api/checkout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ shipping_address })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Order placed successfully!');
+                    window.location.href = '/orders';
+                } else {
+                    alert(data.error || 'Failed to place order');
+                }
+            } catch (error) {
+                console.error('Error placing order:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+    </script>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
+</body>
+</html>

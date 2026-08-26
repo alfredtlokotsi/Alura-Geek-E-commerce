@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Details | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        .page-title {
+            font-size: 2.5rem;
+            margin: 40px 0;
+            text-align: center;
+            color: #FFFFFF;
+        }
+        .order-detail-box {
+            background: #1A1A1A;
+            border: 1px solid #2D2D2D;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .order-detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #2D2D2D;
+        }
+        .order-detail-row:last-child {
+            border-bottom: none;
+        }
+        .order-detail-label {
+            color: #888;
+        }
+        .order-detail-value {
+            color: #FFFFFF;
+            font-weight: 500;
+        }
+        .order-detail-value.gold {
+            color: #D4AF37;
+        }
+        .order-items-list {
+            margin: 20px 0;
+        }
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #1A1A1A;
+            color: #CCCCCC;
+        }
+        .order-item:last-child {
+            border-bottom: none;
+        }
+        .order-item .item-name {
+            flex: 1;
+        }
+        .order-item .item-qty {
+            color: #888;
+            margin: 0 20px;
+        }
+        .order-item .item-price {
+            color: #D4AF37;
+            font-weight: 600;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #D4AF37;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .order-status-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+        .order-status-badge.pending {
+            background: #2D2D2D;
+            color: #D4AF37;
+            border: 1px solid #D4AF37;
+        }
+        .order-status-badge.processing {
+            background: #2D2D2D;
+            color: #3498db;
+            border: 1px solid #3498db;
+        }
+        .order-status-badge.shipped {
+            background: #2D2D2D;
+            color: #2ecc71;
+            border: 1px solid #2ecc71;
+        }
+        .order-status-badge.delivered {
+            background: #D4AF37;
+            color: #1A1A1A;
+        }
+        .order-status-badge.cancelled {
+            background: #2D2D2D;
+            color: #FF4444;
+            border: 1px solid #FF4444;
+        }
+    </style>
+</head>
+<body>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="container">
+            <h1 class="page-title">Order <span class="gold">Details</span></h1>
+            
+            <div class="order-detail-box">
+                <div class="order-detail-row">
+                    <span class="order-detail-label">Order ID</span>
+                    <span class="order-detail-value gold">#<%= locals.order.id.slice(0, 12) %></span>
+                </div>
+                <div class="order-detail-row">
+                    <span class="order-detail-label">Date</span>
+                    <span class="order-detail-value"><%= new Date(locals.order.created_at).toLocaleDateString() %> at <%= new Date(locals.order.created_at).toLocaleTimeString() %></span>
+                </div>
+                <div class="order-detail-row">
+                    <span class="order-detail-label">Status</span>
+                    <span class="order-status-badge <%= locals.order.status %>"><%= locals.order.status %></span>
+                </div>
+                <div class="order-detail-row">
+                    <span class="order-detail-label">Shipping Address</span>
+                    <span class="order-detail-value"><%= locals.order.shipping_address %></span>
+                </div>
+                <div class="order-detail-row">
+                    <span class="order-detail-label">Payment Method</span>
+                    <span class="order-detail-value"><%= locals.order.payment_method || 'Cash on Delivery' %></span>
+                </div>
+                
+                <div style="margin: 20px 0; border-top: 1px solid #2D2D2D; padding-top: 20px;">
+                    <h3 style="color: #D4AF37; margin-bottom: 15px;">Items</h3>
+                    <div class="order-items-list">
+                        <% locals.items.forEach(item => { %>
+                            <div class="order-item">
+                                <span class="item-name"><%= item.product_name %></span>
+                                <span class="item-qty">× <%= item.quantity %></span>
+                                <span class="item-price">R <%= item.price.toFixed(2) %></span>
+                            </div>
+                        <% }) %>
+                    </div>
+                    <div style="text-align: right; padding-top: 15px; border-top: 1px solid #2D2D2D;">
+                        <span style="color: #888;">Total: </span>
+                        <span style="color: #D4AF37; font-size: 1.3rem; font-weight: 700;">R <%= locals.order.total_amount %></span>
+                    </div>
+                </div>
+                
+                <a href="/orders" class="back-link">← Back to My Orders</a>
+            </div>
+        </div>
+    </main>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
+</body>
+</html>

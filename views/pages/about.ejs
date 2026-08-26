@@ -1,51 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>About | Explore Essence</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        .about-page {
+            max-width: 900px;
+            margin: 50px auto;
+            text-align: center;
+        }
+        .about-page h1 {
+            font-size: 2.8rem;
+            color: #FFFFFF;
+        }
+        .gold-divider {
+            width: 80px;
+            height: 3px;
+            background: #D4AF37;
+            margin: 20px auto;
+        }
+        .about-tagline {
+            font-size: 1.3rem;
+            color: #AAAAAA;
+            margin: 10px 0 30px;
+        }
+        .about-content {
+            text-align: left;
+            background: #1A1A1A;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #2D2D2D;
+            margin: 30px 0;
+        }
+        .about-content p {
+            color: #CCCCCC;
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+        .about-values {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .value-card {
+            background: #1A1A1A;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #2D2D2D;
+            transition: border-color 0.3s ease;
+        }
+        .value-card:hover {
+            border-color: #D4AF37;
+        }
+        .value-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .value-card h4 {
+            color: #D4AF37;
+        }
+        .value-card p {
+            color: #888;
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body>
-  <%- include('../partials/header') %>
-  
-  <main>
-    <div class="container">
-      <div class="about-page">
-        <h1>✨ About <span class="gold">Explore Essence</span></h1>
-        <div class="gold-divider"></div>
-        
-        <p class="about-tagline">Premium curated goods for the discerning soul.</p>
-        
-        <div class="about-content">
-          <p>At <strong>Explore Essence</strong>, we believe that everyday objects should tell a story. We carefully curate products that blend timeless design with modern craftsmanship.</p>
-          
-          <p>Each item in our collection is chosen for its quality, character, and the joy it brings to daily life. From our signature golden mugs to our minimalist pour-over drippers, every product is selected with intention.</p>
-        </div>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="container">
+            <div class="about-page">
+                <h1>✨ About <span class="gold">Explore Essence</span></h1>
+                <div class="gold-divider"></div>
+                
+                <p class="about-tagline">Premium curated goods for the discerning soul.</p>
+                
+                <div class="about-content">
+                    <p>At <strong>Explore Essence</strong>, we believe that everyday objects should tell a story. We carefully curate products that blend timeless design with modern craftsmanship.</p>
+                    
+                    <p>Each item in our collection is chosen for its quality, character, and the joy it brings to daily life. From our signature golden mugs to our minimalist pour-over drippers, every product is selected with intention.</p>
+                </div>
 
-        <div class="about-values">
-          <div class="value-card">
-            <div class="value-icon">🌍</div>
-            <h4>Global Curated</h4>
-            <p>Sourced from artisans worldwide</p>
-          </div>
-          <div class="value-card">
-            <div class="value-icon">✨</div>
-            <h4>Quality First</h4>
-            <p>Every item meets our high standards</p>
-          </div>
-          <div class="value-card">
-            <div class="value-icon">🤝</div>
-            <h4>Fair Trade</h4>
-            <p>Supporting ethical production</p>
-          </div>
+                <div class="about-values">
+                    <div class="value-card">
+                        <div class="value-icon">🌍</div>
+                        <h4>Global Curated</h4>
+                        <p>Sourced from artisans worldwide</p>
+                    </div>
+                    <div class="value-card">
+                        <div class="value-icon">✨</div>
+                        <h4>Quality First</h4>
+                        <p>Every item meets our high standards</p>
+                    </div>
+                    <div class="value-card">
+                        <div class="value-icon">🤝</div>
+                        <h4>Fair Trade</h4>
+                        <p>Supporting ethical production</p>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </main>
+    </main>
 
-  <%- include('../partials/footer') %>
+    <%- include('../partials/footer', { user: locals.user }) %>
 </body>
 </html>

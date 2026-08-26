@@ -1,33 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= product.name %> | Explore Essence</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= locals.product.name %> | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
 <body>
-  <%- include('../partials/header') %>
-  
-  <main>
-    <div class="container">
-      <div class="product-detail">
-        <div class="product-image">
-          <img src="/images/<%= product.image_url %>" alt="<%= product.name %>" onerror="this.src='/images/placeholder.jpg'">
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="container">
+            <div class="product-detail">
+                <div class="product-image">
+                    <img src="/images/<%= locals.product.image_url || 'placeholder.jpg' %>" 
+                         alt="<%= locals.product.name %>" 
+                         onerror="this.src='/images/placeholder.jpg'">
+                </div>
+                <div class="product-info">
+                    <h1><%= locals.product.name %></h1>
+                    <p class="price">R <%= locals.product.price.toFixed(2) %></p>
+                    <p class="description"><%= locals.product.description %></p>
+                    <p class="stock">📦 <span class="stock-count"><%= locals.product.stock %></span> in stock</p>
+                    <button class="btn btn-primary btn-large" onclick="addToCart(<%= locals.product.id %>)">
+                        <i class="fas fa-cart-plus"></i> Add to Cart
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="product-info">
-          <h1><%= product.name %></h1>
-          <p class="price">R <%= product.price.toFixed(2) %></p>
-          <p class="description"><%= product.description %></p>
-          <p class="stock">📦 <span class="stock-count"><%= product.stock %></span> in stock</p>
-          <a href="/checkout/<%= product.id %>" class="btn btn-primary btn-large">Buy Now</a>
-        </div>
-      </div>
-    </div>
-  </main>
+    </main>
 
-  <%- include('../partials/footer') %>
+    <script>
+        async function addToCart(productId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                document.getElementById('loginBtn')?.click();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/cart/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ product_id: productId, quantity: 1 })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Item added to cart!');
+                    const badge = document.getElementById('cartBadge');
+                    if (badge) {
+                        const current = parseInt(badge.textContent) || 0;
+                        badge.textContent = current + 1;
+                    }
+                } else {
+                    alert(data.error || 'Failed to add to cart');
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+    </script>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
 </body>
 </html>

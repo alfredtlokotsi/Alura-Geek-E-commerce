@@ -49,19 +49,54 @@ db.serialize(() => {
     )
   `);
 
+  // --- CART TABLE ---
+  db.run(`
+    CREATE TABLE IF NOT EXISTS cart (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // --- CART ITEMS TABLE ---
+  db.run(`
+    CREATE TABLE IF NOT EXISTS cart_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cart_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER DEFAULT 1,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cart_id) REFERENCES cart(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+  `);
+
   // --- ORDERS TABLE ---
   db.run(`
     CREATE TABLE IF NOT EXISTS orders (
       id TEXT PRIMARY KEY,
       user_id INTEGER,
-      product_id INTEGER,
-      product_name TEXT,
-      amount REAL,
-      customer_email TEXT,
-      payment_link TEXT,
+      total_amount REAL,
       status TEXT DEFAULT 'pending',
+      shipping_address TEXT,
+      payment_method TEXT DEFAULT 'cash_on_delivery',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+  // --- ORDER ITEMS TABLE ---
+  db.run(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id TEXT NOT NULL,
+      product_id INTEGER NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      price REAL NOT NULL,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES products(id)
     )
   `);
@@ -73,8 +108,6 @@ db.serialize(() => {
       return;
     }
     if (row.count === 0) {
-      // We'll use a default admin account
-      // Password: admin123 (hashed)
       const bcrypt = require('bcryptjs');
       const hashedPassword = bcrypt.hashSync('admin123', 10);
       
@@ -85,7 +118,9 @@ db.serialize(() => {
           if (err) {
             console.error('Failed to create admin user:', err);
           } else {
-            console.log('✅ Default admin user created: admin@exploreessence.com / admin123');
+            console.log('✅ Default admin user created:');
+            console.log('   Email: admin@exploreessence.com');
+            console.log('   Password: admin123');
           }
         }
       );
@@ -123,50 +158,206 @@ app.use('/api/auth', authRoutes);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// --- Web Routes ---
+// ============================================================
+// WEB ROUTES (EJS Pages)
+// ============================================================
+
+// --- Homepage ---
 app.get('/', (req, res) => {
   db.all("SELECT * FROM products ORDER BY created_at DESC", (err, products) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Database error');
     }
-    res.render('pages/index', { title: 'Explore Essence', products });
+    res.render('pages/index', { 
+      title: 'Home', 
+      user: req.user,
+      products 
+    });
   });
 });
 
+// --- Shop All ---
 app.get('/products', (req, res) => {
   db.all("SELECT * FROM products ORDER BY created_at DESC", (err, products) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Database error');
     }
-    res.render('pages/products', { title: 'Shop All', products });
+    res.render('pages/products', { 
+      title: 'Shop All', 
+      user: req.user,
+      products 
+    });
   });
 });
 
+// --- About ---
 app.get('/about', (req, res) => {
-  res.render('pages/about', { title: 'About Explore Essence' });
+  res.render('pages/about', { 
+    title: 'About Explore Essence',
+    user: req.user
+  });
 });
 
+// --- Product Detail ---
 app.get('/product/:id', (req, res) => {
   db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (err, product) => {
     if (err || !product) {
       return res.status(404).send('Product not found');
     }
-    res.render('pages/product', { title: product.name, product });
+    res.render('pages/product', { 
+      title: product.name, 
+      user: req.user,
+      product 
+    });
   });
 });
 
-app.get('/checkout/:productId', (req, res) => {
+// --- Checkout ---
+app.get('/checkout/:productId', verifyToken, (req, res) => {
   db.get("SELECT * FROM products WHERE id = ?", [req.params.productId], (err, product) => {
     if (err || !product) {
       return res.status(404).send('Product not found');
     }
-    res.render('pages/checkout', { title: 'Checkout', product });
+    res.render('pages/checkout', { 
+      title: 'Checkout', 
+      user: req.user,
+      product 
+    });
   });
 });
 
-// --- PUBLIC API ROUTES ---
+// --- Cart Page ---
+app.get('/cart', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  
+  getOrCreateCart(userId, (err, cart) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Database error');
+    }
+    
+    db.all(`
+      SELECT ci.*, p.name, p.price, p.image_url, p.stock
+      FROM cart_items ci
+      JOIN products p ON ci.product_id = p.id
+      WHERE ci.cart_id = ?
+    `, [cart.id], (err, items) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Database error');
+      }
+      
+      let total = 0;
+      items.forEach(item => {
+        total += item.price * item.quantity;
+      });
+      
+      res.render('pages/cart', {
+        title: 'Your Cart',
+        user: req.user,
+        items: items,
+        total: total.toFixed(2)
+      });
+    });
+  });
+});
+
+// --- Admin Dashboard ---
+app.get('/admin', verifyToken, verifyAdmin, (req, res) => {
+  db.all(
+    "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
+    (err, users) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Database error');
+      }
+      res.render('pages/admin', { 
+        title: 'Admin Dashboard',
+        user: req.user,
+        users: users
+      });
+    }
+  );
+});
+
+// --- My Orders ---
+app.get('/orders', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  
+  db.all(`
+    SELECT o.*, 
+      (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+    FROM orders o
+    WHERE o.user_id = ?
+    ORDER BY o.created_at DESC
+  `, [userId], (err, orders) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Database error');
+    }
+    res.render('pages/orders', {
+      title: 'My Orders',
+      user: req.user,
+      orders: orders
+    });
+  });
+});
+
+// --- Order Details ---
+app.get('/orders/:orderId', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  const orderId = req.params.orderId;
+  
+  db.get(
+    "SELECT * FROM orders WHERE id = ? AND user_id = ?",
+    [orderId, userId],
+    (err, order) => {
+      if (err || !order) {
+        return res.status(404).send('Order not found');
+      }
+      
+      db.all(
+        "SELECT * FROM order_items WHERE order_id = ?",
+        [orderId],
+        (err, items) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).send('Database error');
+          }
+          res.render('pages/order-detail', {
+            title: 'Order Details',
+            user: req.user,
+            order: order,
+            items: items
+          });
+        }
+      );
+    }
+  );
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+// Helper: Get or create cart for user
+const getOrCreateCart = (userId, callback) => {
+  db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
+    if (err) return callback(err);
+    if (cart) return callback(null, cart);
+    
+    db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
+      if (err) return callback(err);
+      callback(null, { id: this.lastID });
+    });
+  });
+};
+
+// ============================================================
+// PUBLIC API ROUTES
+// ============================================================
 
 // GET all products (public)
 app.get('/api/products', (req, res) => {
@@ -198,7 +389,9 @@ app.get('/api/products/category/:category', (req, res) => {
   });
 });
 
-// --- PROTECTED API ROUTES (require authentication) ---
+// ============================================================
+// PROTECTED API ROUTES (require authentication)
+// ============================================================
 
 // POST - Add new product (Admin only)
 app.post('/api/products', verifyToken, verifyAdmin, (req, res) => {
@@ -274,214 +467,413 @@ app.delete('/api/products/:id', verifyToken, verifyAdmin, (req, res) => {
   });
 });
 
-// --- ORDER ROUTES ---
+// ============================================================
+// 🛒 CART API ROUTES
+// ============================================================
 
-// POST - Create order (authenticated users only)
-app.post('/api/create-order', verifyToken, (req, res) => {
-  const { product_id, customer_email, quantity = 1 } = req.body;
-  const user_id = req.user.id;
+// GET - Get user's cart
+app.get('/api/cart', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  
+  getOrCreateCart(userId, (err, cart) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    db.all(`
+      SELECT ci.*, p.name, p.price, p.image_url, p.stock
+      FROM cart_items ci
+      JOIN products p ON ci.product_id = p.id
+      WHERE ci.cart_id = ?
+    `, [cart.id], (err, items) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      let total = 0;
+      items.forEach(item => {
+        total += item.price * item.quantity;
+      });
+      
+      res.json({
+        cart_id: cart.id,
+        items,
+        total: total.toFixed(2),
+        item_count: items.length
+      });
+    });
+  });
+});
 
-  if (!product_id || !customer_email) {
-    return res.status(400).json({ error: 'Product ID and email are required' });
+// POST - Add item to cart
+app.post('/api/cart/add', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  const { product_id, quantity = 1 } = req.body;
+  
+  if (!product_id) {
+    return res.status(400).json({ error: 'Product ID is required' });
   }
-
+  
   db.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
     if (err || !product) {
       return res.status(404).json({ error: 'Product not found' });
     }
+    
+    if (product.stock < quantity) {
+      return res.status(400).json({ error: 'Not enough stock available' });
+    }
+    
+    getOrCreateCart(userId, (err, cart) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      db.get(
+        "SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?",
+        [cart.id, product_id],
+        (err, existingItem) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+          
+          if (existingItem) {
+            const newQuantity = existingItem.quantity + quantity;
+            db.run(
+              "UPDATE cart_items SET quantity = ? WHERE id = ?",
+              [newQuantity, existingItem.id],
+              function(err) {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).json({ error: 'Failed to update cart' });
+                }
+                res.json({ 
+                  success: true, 
+                  message: 'Cart updated',
+                  item: { ...existingItem, quantity: newQuantity }
+                });
+              }
+            );
+          } else {
+            db.run(
+              "INSERT INTO cart_items (cart_id, product_id, quantity) VALUES (?, ?, ?)",
+              [cart.id, product_id, quantity],
+              function(err) {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).json({ error: 'Failed to add to cart' });
+                }
+                res.json({ 
+                  success: true, 
+                  message: 'Item added to cart',
+                  item_id: this.lastID
+                });
+              }
+            );
+          }
+        }
+      );
+    });
+  });
+});
 
-    const orderId = uuidv4();
-    const amount = (product.price * quantity).toFixed(2);
-    const baseUrl = req.protocol + '://' + req.get('host');
-    const paymentLink = `${baseUrl}/api/pay/${orderId}`;
-
+// PUT - Update cart item quantity
+app.put('/api/cart/update/:itemId', verifyToken, (req, res) => {
+  const itemId = req.params.itemId;
+  const { quantity } = req.body;
+  const userId = req.user.id;
+  
+  if (!quantity || quantity < 1) {
+    return res.status(400).json({ error: 'Quantity must be at least 1' });
+  }
+  
+  db.get(`
+    SELECT ci.* FROM cart_items ci
+    JOIN cart c ON ci.cart_id = c.id
+    WHERE ci.id = ? AND c.user_id = ?
+  `, [itemId, userId], (err, item) => {
+    if (err || !item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    
     db.run(
-      `INSERT INTO orders (id, user_id, product_id, product_name, amount, customer_email, payment_link, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [orderId, user_id, product_id, product.name, amount, customer_email, paymentLink, 'pending'],
+      "UPDATE cart_items SET quantity = ? WHERE id = ?",
+      [quantity, itemId],
       function(err) {
         if (err) {
           console.error(err);
-          return res.status(500).json({ error: 'Failed to create order' });
+          return res.status(500).json({ error: 'Failed to update cart' });
         }
-        res.json({
-          orderId,
-          paymentLink,
-          amount,
-          product: product.name,
-          status: 'pending'
-        });
+        res.json({ success: true, message: 'Cart updated' });
       }
     );
   });
 });
 
-// GET - User's orders (authenticated users only)
-app.get('/api/my-orders', verifyToken, (req, res) => {
-  db.all(
-    "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC", 
-    [req.user.id], 
-    (err, orders) => {
+// DELETE - Remove item from cart
+app.delete('/api/cart/remove/:itemId', verifyToken, (req, res) => {
+  const itemId = req.params.itemId;
+  const userId = req.user.id;
+  
+  db.get(`
+    SELECT ci.* FROM cart_items ci
+    JOIN cart c ON ci.cart_id = c.id
+    WHERE ci.id = ? AND c.user_id = ?
+  `, [itemId, userId], (err, item) => {
+    if (err || !item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    
+    db.run("DELETE FROM cart_items WHERE id = ?", [itemId], function(err) {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Failed to remove item' });
+      }
+      res.json({ success: true, message: 'Item removed from cart' });
+    });
+  });
+});
+
+// DELETE - Clear cart
+app.delete('/api/cart/clear', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  
+  db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
+    if (err || !cart) {
+      return res.status(404).json({ error: 'Cart not found' });
+    }
+    
+    db.run("DELETE FROM cart_items WHERE cart_id = ?", [cart.id], function(err) {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Failed to clear cart' });
+      }
+      res.json({ success: true, message: 'Cart cleared' });
+    });
+  });
+});
+
+// ============================================================
+// 📦 ORDER API ROUTES
+// ============================================================
+
+// POST - Create order from cart (No payment link)
+app.post('/api/checkout', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  const { shipping_address, payment_method = 'cash_on_delivery' } = req.body;
+  
+  if (!shipping_address) {
+    return res.status(400).json({ error: 'Shipping address is required' });
+  }
+  
+  db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
+    if (err || !cart) {
+      return res.status(404).json({ error: 'Cart not found' });
+    }
+    
+    db.all(`
+      SELECT ci.*, p.name, p.price, p.stock
+      FROM cart_items ci
+      JOIN products p ON ci.product_id = p.id
+      WHERE ci.cart_id = ?
+    `, [cart.id], (err, items) => {
       if (err) {
         console.error(err);
         return res.status(500).json({ error: 'Database error' });
       }
-      res.json(orders);
+      
+      if (items.length === 0) {
+        return res.status(400).json({ error: 'Cart is empty' });
+      }
+      
+      let total = 0;
+      items.forEach(item => {
+        total += item.price * item.quantity;
+      });
+      
+      const orderId = uuidv4();
+      
+      db.run("BEGIN TRANSACTION", (err) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: 'Failed to start transaction' });
+        }
+        
+        db.run(
+          `INSERT INTO orders (id, user_id, total_amount, status, shipping_address, payment_method) 
+           VALUES (?, ?, ?, 'pending', ?, ?)`,
+          [orderId, userId, total.toFixed(2), shipping_address, payment_method],
+          function(err) {
+            if (err) {
+              console.error(err);
+              db.run("ROLLBACK");
+              return res.status(500).json({ error: 'Failed to create order' });
+            }
+            
+            let completed = 0;
+            let hasError = false;
+            
+            items.forEach((item) => {
+              db.run(
+                `INSERT INTO order_items (order_id, product_id, product_name, quantity, price) 
+                 VALUES (?, ?, ?, ?, ?)`,
+                [orderId, item.product_id, item.name, item.quantity, item.price],
+                function(err) {
+                  if (err) {
+                    console.error(err);
+                    hasError = true;
+                    db.run("ROLLBACK");
+                    return;
+                  }
+                  
+                  const newStock = item.stock - item.quantity;
+                  db.run(
+                    "UPDATE products SET stock = ? WHERE id = ?",
+                    [newStock, item.product_id],
+                    function(err) {
+                      if (err) {
+                        console.error(err);
+                        hasError = true;
+                        db.run("ROLLBACK");
+                        return;
+                      }
+                      
+                      completed++;
+                      if (completed === items.length && !hasError) {
+                        db.run("DELETE FROM cart_items WHERE cart_id = ?", [cart.id], function(err) {
+                          if (err) {
+                            console.error(err);
+                            db.run("ROLLBACK");
+                            return;
+                          }
+                          
+                          db.run("COMMIT", (err) => {
+                            if (err) {
+                              console.error(err);
+                              db.run("ROLLBACK");
+                              return res.status(500).json({ error: 'Failed to complete order' });
+                            }
+                            
+                            res.status(201).json({
+                              success: true,
+                              order_id: orderId,
+                              total: total.toFixed(2),
+                              items: items,
+                              message: 'Order placed successfully!'
+                            });
+                          });
+                        });
+                      }
+                    }
+                  );
+                }
+              );
+            });
+          }
+        );
+      });
+    });
+  });
+});
+
+// GET - User's orders
+app.get('/api/my-orders', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  
+  db.all(`
+    SELECT o.*, 
+      (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+    FROM orders o
+    WHERE o.user_id = ?
+    ORDER BY o.created_at DESC
+  `, [userId], (err, orders) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(orders);
+  });
+});
+
+// GET - Single order details
+app.get('/api/order/:orderId', verifyToken, (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user.id;
+  
+  db.get(
+    "SELECT * FROM orders WHERE id = ? AND user_id = ?",
+    [orderId, userId],
+    (err, order) => {
+      if (err || !order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      db.all(
+        "SELECT * FROM order_items WHERE order_id = ?",
+        [orderId],
+        (err, items) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+          res.json({ ...order, items });
+        }
+      );
     }
   );
 });
 
 // GET - All orders (Admin only)
 app.get('/api/all-orders', verifyToken, verifyAdmin, (req, res) => {
-  db.all(
-    "SELECT * FROM orders ORDER BY created_at DESC", 
-    (err, orders) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: 'Database error' });
-      }
-      res.json(orders);
+  db.all(`
+    SELECT o.*, u.name as user_name, u.email as user_email,
+      (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    ORDER BY o.created_at DESC
+  `, (err, orders) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
     }
-  );
-});
-
-// GET - Order details
-app.get('/api/order/:orderId', (req, res) => {
-  db.get("SELECT * FROM orders WHERE id = ?", [req.params.orderId], (err, order) => {
-    if (err || !order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    res.json(order);
+    res.json(orders);
   });
 });
 
-// GET - Mock payment page
-app.get('/api/pay/:orderId', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Payment - Explore Essence</title>
-      <style>
-        body { 
-          background: #0D0D0D; 
-          color: #E8E8E8; 
-          font-family: system-ui, sans-serif;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh;
-          margin: 0;
-        }
-        .payment-box {
-          background: #1A1A1A;
-          padding: 40px;
-          border-radius: 16px;
-          border: 1px solid #2D2D2D;
-          max-width: 400px;
-          text-align: center;
-        }
-        h1 { color: #D4AF37; }
-        .gold { color: #D4AF37; }
-        .btn {
-          display: inline-block;
-          padding: 12px 30px;
-          background: #D4AF37;
-          color: #1A1A1A;
-          text-decoration: none;
-          border-radius: 8px;
-          font-weight: 600;
-          margin-top: 20px;
-          border: none;
-          cursor: pointer;
-        }
-        .btn:hover { background: #C5A028; }
-        .note { color: #666; font-size: 0.85rem; margin-top: 15px; }
-      </style>
-    </head>
-    <body>
-      <div class="payment-box">
-        <h1>✨ Explore Essence</h1>
-        <p>Order: <span class="gold">${req.params.orderId}</span></p>
-        <p style="color: #888;">This is a mock payment page.</p>
-        <p style="color: #555; font-size: 0.9rem;">In production, you'd be redirected to PayFast, Yoco, or Ozow.</p>
-        <a href="/api/mock-success/${req.params.orderId}" class="btn">💳 Simulate Payment</a>
-        <p class="note">Test payment - no real money will be charged</p>
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-// GET - Mock payment success
-app.get('/api/mock-success/:orderId', (req, res) => {
+// PUT - Update order status (Admin only)
+app.put('/api/orders/:orderId/status', verifyToken, verifyAdmin, (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+  
+  const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  
   db.run(
-    "UPDATE orders SET status = 'paid' WHERE id = ?",
-    [req.params.orderId],
+    "UPDATE orders SET status = ? WHERE id = ?",
+    [status, orderId],
     function(err) {
       if (err) {
-        return res.status(500).send('Payment update failed');
+        console.error(err);
+        return res.status(500).json({ error: 'Failed to update order' });
       }
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Payment Successful - Explore Essence</title>
-          <style>
-            body { 
-              background: #0D0D0D; 
-              color: #E8E8E8; 
-              font-family: system-ui, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100vh;
-              margin: 0;
-            }
-            .success-box {
-              background: #1A1A1A;
-              padding: 40px;
-              border-radius: 16px;
-              border: 2px solid #D4AF37;
-              max-width: 400px;
-              text-align: center;
-            }
-            h1 { color: #D4AF37; }
-            .gold { color: #D4AF37; }
-            .btn {
-              display: inline-block;
-              padding: 12px 30px;
-              background: #D4AF37;
-              color: #1A1A1A;
-              text-decoration: none;
-              border-radius: 8px;
-              font-weight: 600;
-              margin-top: 20px;
-            }
-            .btn:hover { background: #C5A028; }
-          </style>
-        </head>
-        <body>
-          <div class="success-box">
-            <h1>✅ Payment Successful!</h1>
-            <p>Order <span class="gold">${req.params.orderId}</span> confirmed.</p>
-            <p style="color: #888;">Thank you for shopping at Explore Essence.</p>
-            <a href="/" class="btn">Continue Shopping</a>
-          </div>
-        </body>
-        </html>
-      `);
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      res.json({ success: true, message: 'Order status updated' });
     }
   );
 });
 
-// POST - Webhook endpoint
-app.post('/api/webhook', (req, res) => {
-  console.log('📩 Webhook received:', req.body);
-  res.status(200).send('OK');
-});
+// ============================================================
+// MISC ROUTES
+// ============================================================
 
-// GET - Health check
+// --- Health Check ---
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -490,11 +882,24 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// --- Start Server ---
+// --- Catch-all for 404 ---
+app.use((req, res) => {
+  res.status(404).render('pages/404', { 
+    title: 'Page Not Found',
+    user: req.user 
+  });
+});
+
+// ============================================================
+// START SERVER
+// ============================================================
+
 app.listen(PORT, () => {
   console.log(`✨ Explore Essence running at http://localhost:${PORT}`);
   console.log(`📦 API available at http://localhost:${PORT}/api/products`);
   console.log(`🔐 Auth available at http://localhost:${PORT}/api/auth`);
+  console.log(`🛒 Cart available at http://localhost:${PORT}/api/cart`);
+  console.log(`👑 Admin dashboard at http://localhost:${PORT}/admin`);
   console.log(`❤️  Health check at http://localhost:${PORT}/api/health`);
 });
 
