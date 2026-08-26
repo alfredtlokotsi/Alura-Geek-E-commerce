@@ -5,16 +5,20 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "postinstall": "npm rebuild sqlite3"
   },
-  "keywords": ["ecommerce", "api", "explore-essence"],
+  "keywords": ["ecommerce", "api", "explore-essence", "authentication"],
   "author": "Alfred",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "ejs": "^3.1.9",
     "express": "^4.18.2",
+    "express-validator": "^7.0.1",
+    "jsonwebtoken": "^9.0.2",
     "sqlite3": "^5.1.6",
     "uuid": "^9.0.1"
   },
