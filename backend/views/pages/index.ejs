@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explore Essence | Home</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <%- include('../partials/header') %>
+  
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <h1>Discover <span class="gold">Essence</span></h1>
+          <p>Curated premium goods for those who appreciate quality.</p>
+          <a href="/products" class="btn btn-primary btn-large">Explore Collection</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="featured-products">
+      <div class="container">
+        <h2 class="section-title">Featured <span class="gold">Products</span></h2>
+        <div class="product-grid">
+          <% products.forEach(product => { %>
+            <div class="product-card">
+              <div class="product-image">
+                <img src="/images/<%= product.image_url %>" alt="<%= product.name %>" onerror="this.src='/images/placeholder.jpg'">
+              </div>
+              <div class="product-info">
+                <h3><%= product.name %></h3>
+                <p class="price">R <%= product.price.toFixed(2) %></p>
+                <a href="/product/<%= product.id %>" class="btn">View Details</a>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <%- include('../partials/footer') %>
+</body>
+</html>
