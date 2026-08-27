@@ -37,10 +37,13 @@ function getToken() {
 
 function setToken(token) {
     localStorage.setItem('token', token);
+    // Also set cookie for page loads
+    document.cookie = `token=${token}; path=/; max-age=${7 * 24 * 60 * 60}`;
 }
 
 function removeToken() {
     localStorage.removeItem('token');
+    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 }
 
 function getUser() {
@@ -142,7 +145,7 @@ async function handleLogin(email, password) {
             closeAllModals();
             loadCartCount();
             showNotification('Logged in successfully!', 'success');
-            setTimeout(() => window.location.reload(), 1000);
+            setTimeout(() => window.location.reload(), 500);
             return true;
         } else {
             loginError.textContent = result.error || 'Login failed';
@@ -168,7 +171,7 @@ async function handleSignup(name, email, password) {
             closeAllModals();
             loadCartCount();
             showNotification('Account created successfully!', 'success');
-            setTimeout(() => window.location.reload(), 1000);
+            setTimeout(() => window.location.reload(), 500);
             return true;
         } else {
             signupError.textContent = result.error || 'Signup failed';
@@ -184,12 +187,19 @@ async function handleSignup(name, email, password) {
 }
 
 function handleLogout() {
+    fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${getToken()}`
+        }
+    }).catch(() => {});
+    
     removeToken();
     removeUser();
     updateUI(null);
     loadCartCount();
     closeAllModals();
-    dropdownMenu.classList.remove('active');
+    if (dropdownMenu) dropdownMenu.classList.remove('active');
     showNotification('Logged out successfully', 'info');
     setTimeout(() => window.location.reload(), 500);
 }
@@ -285,7 +295,6 @@ function showNotification(message, type = 'info') {
 // EVENT LISTENERS
 // ============================================================
 
-// Login
 if (loginBtn) loginBtn.addEventListener('click', openLoginModal);
 if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
@@ -296,7 +305,6 @@ if (loginForm) {
     });
 }
 
-// Signup
 if (signupBtn) signupBtn.addEventListener('click', openSignupModal);
 if (signupForm) {
     signupForm.addEventListener('submit', async (e) => {
@@ -308,10 +316,8 @@ if (signupForm) {
     });
 }
 
-// Logout
 if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
-// Modal switches
 if (switchToSignup) {
     switchToSignup.addEventListener('click', (e) => {
         e.preventDefault();
@@ -327,11 +333,9 @@ if (switchToLogin) {
     });
 }
 
-// Close modals
 if (closeLoginModal) closeLoginModal.addEventListener('click', closeAllModals);
 if (closeSignupModal) closeSignupModal.addEventListener('click', closeAllModals);
 
-// Close modals on backdrop click
 if (loginModal) {
     loginModal.addEventListener('click', (e) => {
         if (e.target === loginModal) closeAllModals();
@@ -343,19 +347,16 @@ if (signupModal) {
     });
 }
 
-// Close modals with Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeAllModals();
 });
 
-// Toggle dropdown
 if (userAvatar) {
     userAvatar.addEventListener('click', () => {
         if (dropdownMenu) dropdownMenu.classList.toggle('active');
     });
 }
 
-// Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
     if (userAvatar && dropdownMenu) {
         if (!userAvatar.contains(e.target) && !dropdownMenu.contains(e.target)) {
@@ -368,7 +369,6 @@ document.addEventListener('click', (e) => {
 // INITIALIZATION
 // ============================================================
 
-// Check if user is already logged in
 async function initAuth() {
     const token = getToken();
     if (token) {
@@ -377,7 +377,6 @@ async function initAuth() {
             setUser(user);
             updateUI(user);
         } else {
-            // Token invalid
             removeToken();
             removeUser();
             updateUI(null);
@@ -386,17 +385,16 @@ async function initAuth() {
     loadCartCount();
 }
 
-// Run initialization
 document.addEventListener('DOMContentLoaded', () => {
     initAuth();
 });
 
-// Expose functions to global scope for use in other scripts
 window.ExploreEssence = {
     getToken,
     getUser,
     getAuthHeaders,
     loadCartCount,
     showNotification,
-    logout: handleLogout
+    logout: handleLogout,
+    login: handleLogin
 };

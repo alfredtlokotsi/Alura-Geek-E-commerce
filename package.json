@@ -8,11 +8,17 @@
     "dev": "nodemon server.js",
     "postinstall": "npm rebuild sqlite3"
   },
-  "keywords": ["ecommerce", "api", "explore-essence", "authentication"],
+  "keywords": [
+    "ecommerce",
+    "api",
+    "explore-essence",
+    "authentication"
+  ],
   "author": "Alfred",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "ejs": "^3.1.9",

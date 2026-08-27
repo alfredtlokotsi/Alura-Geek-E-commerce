@@ -3,7 +3,9 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser');
 const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
 
 // Import middleware
 const { verifyToken, verifyAdmin } = require('./middleware/auth');
@@ -14,9 +16,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- Middleware ---
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Database Setup ---
@@ -164,6 +170,17 @@ app.set('views', path.join(__dirname, 'views'));
 
 // --- Homepage ---
 app.get('/', (req, res) => {
+  let user = null;
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      user = decoded;
+    } catch (error) {
+      // Token invalid, ignore
+    }
+  }
+  
   db.all("SELECT * FROM products ORDER BY created_at DESC", (err, products) => {
     if (err) {
       console.error(err);
@@ -171,7 +188,7 @@ app.get('/', (req, res) => {
     }
     res.render('pages/index', { 
       title: 'Home', 
-      user: req.user,
+      user: user,
       products 
     });
   });
@@ -179,6 +196,17 @@ app.get('/', (req, res) => {
 
 // --- Shop All ---
 app.get('/products', (req, res) => {
+  let user = null;
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      user = decoded;
+    } catch (error) {
+      // Token invalid, ignore
+    }
+  }
+  
   db.all("SELECT * FROM products ORDER BY created_at DESC", (err, products) => {
     if (err) {
       console.error(err);
@@ -186,7 +214,7 @@ app.get('/products', (req, res) => {
     }
     res.render('pages/products', { 
       title: 'Shop All', 
-      user: req.user,
+      user: user,
       products 
     });
   });
@@ -194,35 +222,42 @@ app.get('/products', (req, res) => {
 
 // --- About ---
 app.get('/about', (req, res) => {
+  let user = null;
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      user = decoded;
+    } catch (error) {
+      // Token invalid, ignore
+    }
+  }
   res.render('pages/about', { 
     title: 'About Explore Essence',
-    user: req.user
+    user: user
   });
 });
 
 // --- Product Detail ---
 app.get('/product/:id', (req, res) => {
+  let user = null;
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      user = decoded;
+    } catch (error) {
+      // Token invalid, ignore
+    }
+  }
+  
   db.get("SELECT * FROM products WHERE id = ?", [req.params.id], (err, product) => {
     if (err || !product) {
       return res.status(404).send('Product not found');
     }
     res.render('pages/product', { 
       title: product.name, 
-      user: req.user,
-      product 
-    });
-  });
-});
-
-// --- Checkout ---
-app.get('/checkout/:productId', verifyToken, (req, res) => {
-  db.get("SELECT * FROM products WHERE id = ?", [req.params.productId], (err, product) => {
-    if (err || !product) {
-      return res.status(404).send('Product not found');
-    }
-    res.render('pages/checkout', { 
-      title: 'Checkout', 
-      user: req.user,
+      user: user,
       product 
     });
   });
@@ -232,21 +267,18 @@ app.get('/checkout/:productId', verifyToken, (req, res) => {
 app.get('/cart', verifyToken, (req, res) => {
   const userId = req.user.id;
   
-  // Get or create cart for user
   db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).send('Database error');
     }
     
-    // If no cart exists, create one
     if (!cart) {
       db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
         if (err) {
           console.error('Failed to create cart:', err);
           return res.status(500).send('Failed to create cart');
         }
-        // Return empty cart
         return res.render('pages/cart', {
           title: 'Your Cart',
           user: req.user,
@@ -257,7 +289,6 @@ app.get('/cart', verifyToken, (req, res) => {
       return;
     }
     
-    // Get cart items
     db.all(`
       SELECT ci.*, p.name, p.price, p.image_url, p.stock
       FROM cart_items ci
@@ -478,14 +509,12 @@ app.delete('/api/products/:id', verifyToken, verifyAdmin, (req, res) => {
 app.get('/api/cart', verifyToken, (req, res) => {
   const userId = req.user.id;
   
-  // Get or create cart for user
   db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
     
-    // If no cart exists, create one
     if (!cart) {
       db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
         if (err) {
@@ -502,7 +531,6 @@ app.get('/api/cart', verifyToken, (req, res) => {
       return;
     }
     
-    // Get cart items
     db.all(`
       SELECT ci.*, p.name, p.price, p.image_url, p.stock
       FROM cart_items ci
@@ -538,7 +566,6 @@ app.post('/api/cart/add', verifyToken, (req, res) => {
     return res.status(400).json({ error: 'Product ID is required' });
   }
   
-  // Check if product exists and has stock
   db.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
     if (err || !product) {
       return res.status(404).json({ error: 'Product not found' });
@@ -548,7 +575,6 @@ app.post('/api/cart/add', verifyToken, (req, res) => {
       return res.status(400).json({ error: 'Not enough stock available' });
     }
     
-    // Get or create cart for user
     db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
       if (err) {
         console.error('Database error:', err);
@@ -571,9 +597,7 @@ app.post('/api/cart/add', verifyToken, (req, res) => {
   });
 });
 
-// Helper function to add item to cart
 function addItemToCart(cartId, productId, quantity, res) {
-  // Check if item already in cart
   db.get(
     "SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?",
     [cartId, productId],
@@ -584,7 +608,6 @@ function addItemToCart(cartId, productId, quantity, res) {
       }
       
       if (existingItem) {
-        // Update quantity
         const newQuantity = existingItem.quantity + quantity;
         db.run(
           "UPDATE cart_items SET quantity = ? WHERE id = ?",
@@ -602,7 +625,6 @@ function addItemToCart(cartId, productId, quantity, res) {
           }
         );
       } else {
-        // Add new item
         db.run(
           "INSERT INTO cart_items (cart_id, product_id, quantity) VALUES (?, ?, ?)",
           [cartId, productId, quantity],
@@ -703,7 +725,7 @@ app.delete('/api/cart/clear', verifyToken, (req, res) => {
 // 📦 ORDER API ROUTES
 // ============================================================
 
-// POST - Create order from cart (No payment link)
+// POST - Create order from cart
 app.post('/api/checkout', verifyToken, (req, res) => {
   const userId = req.user.id;
   const { shipping_address, payment_method = 'cash_on_delivery' } = req.body;
@@ -925,11 +947,30 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// --- Debug Cookie Route ---
+app.get('/debug-cookie', (req, res) => {
+  res.json({
+    cookies: req.cookies,
+    hasToken: !!req.cookies?.token,
+    allCookies: req.headers.cookie || 'No cookies sent'
+  });
+});
+
 // --- Catch-all for 404 ---
 app.use((req, res) => {
+  let user = null;
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      user = decoded;
+    } catch (error) {
+      // Token invalid, ignore
+    }
+  }
   res.status(404).render('pages/404', { 
     title: 'Page Not Found',
-    user: req.user 
+    user: user 
   });
 });
 
@@ -944,6 +985,7 @@ app.listen(PORT, () => {
   console.log(`🛒 Cart available at http://localhost:${PORT}/api/cart`);
   console.log(`👑 Admin dashboard at http://localhost:${PORT}/admin`);
   console.log(`❤️  Health check at http://localhost:${PORT}/api/health`);
+  console.log(`🐛 Debug cookie at http://localhost:${PORT}/debug-cookie`);
 });
 
 module.exports = { db };
