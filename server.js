@@ -232,12 +232,32 @@ app.get('/checkout/:productId', verifyToken, (req, res) => {
 app.get('/cart', verifyToken, (req, res) => {
   const userId = req.user.id;
   
-  getOrCreateCart(userId, (err, cart) => {
+  // Get or create cart for user
+  db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
     if (err) {
-      console.error(err);
+      console.error('Database error:', err);
       return res.status(500).send('Database error');
     }
     
+    // If no cart exists, create one
+    if (!cart) {
+      db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
+        if (err) {
+          console.error('Failed to create cart:', err);
+          return res.status(500).send('Failed to create cart');
+        }
+        // Return empty cart
+        return res.render('pages/cart', {
+          title: 'Your Cart',
+          user: req.user,
+          items: [],
+          total: '0.00'
+        });
+      });
+      return;
+    }
+    
+    // Get cart items
     db.all(`
       SELECT ci.*, p.name, p.price, p.image_url, p.stock
       FROM cart_items ci
@@ -245,7 +265,7 @@ app.get('/cart', verifyToken, (req, res) => {
       WHERE ci.cart_id = ?
     `, [cart.id], (err, items) => {
       if (err) {
-        console.error(err);
+        console.error('Database error:', err);
         return res.status(500).send('Database error');
       }
       
@@ -262,24 +282,6 @@ app.get('/cart', verifyToken, (req, res) => {
       });
     });
   });
-});
-
-// --- Admin Dashboard ---
-app.get('/admin', verifyToken, verifyAdmin, (req, res) => {
-  db.all(
-    "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
-    (err, users) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).send('Database error');
-      }
-      res.render('pages/admin', { 
-        title: 'Admin Dashboard',
-        user: req.user,
-        users: users
-      });
-    }
-  );
 });
 
 // --- My Orders ---
@@ -300,7 +302,7 @@ app.get('/orders', verifyToken, (req, res) => {
     res.render('pages/orders', {
       title: 'My Orders',
       user: req.user,
-      orders: orders
+      orders: orders || []
     });
   });
 });
@@ -330,7 +332,7 @@ app.get('/orders/:orderId', verifyToken, (req, res) => {
             title: 'Order Details',
             user: req.user,
             order: order,
-            items: items
+            items: items || []
           });
         }
       );
@@ -338,22 +340,23 @@ app.get('/orders/:orderId', verifyToken, (req, res) => {
   );
 });
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-// Helper: Get or create cart for user
-const getOrCreateCart = (userId, callback) => {
-  db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
-    if (err) return callback(err);
-    if (cart) return callback(null, cart);
-    
-    db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
-      if (err) return callback(err);
-      callback(null, { id: this.lastID });
-    });
-  });
-};
+// --- Admin Dashboard ---
+app.get('/admin', verifyToken, verifyAdmin, (req, res) => {
+  db.all(
+    "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
+    (err, users) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Database error');
+      }
+      res.render('pages/admin', { 
+        title: 'Admin Dashboard',
+        user: req.user,
+        users: users
+      });
+    }
+  );
+});
 
 // ============================================================
 // PUBLIC API ROUTES
@@ -475,12 +478,31 @@ app.delete('/api/products/:id', verifyToken, verifyAdmin, (req, res) => {
 app.get('/api/cart', verifyToken, (req, res) => {
   const userId = req.user.id;
   
-  getOrCreateCart(userId, (err, cart) => {
+  // Get or create cart for user
+  db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
     if (err) {
-      console.error(err);
+      console.error('Database error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
     
+    // If no cart exists, create one
+    if (!cart) {
+      db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
+        if (err) {
+          console.error('Failed to create cart:', err);
+          return res.status(500).json({ error: 'Failed to create cart' });
+        }
+        return res.json({
+          cart_id: this.lastID,
+          items: [],
+          total: '0.00',
+          item_count: 0
+        });
+      });
+      return;
+    }
+    
+    // Get cart items
     db.all(`
       SELECT ci.*, p.name, p.price, p.image_url, p.stock
       FROM cart_items ci
@@ -488,7 +510,7 @@ app.get('/api/cart', verifyToken, (req, res) => {
       WHERE ci.cart_id = ?
     `, [cart.id], (err, items) => {
       if (err) {
-        console.error(err);
+        console.error('Database error:', err);
         return res.status(500).json({ error: 'Database error' });
       }
       
@@ -499,7 +521,7 @@ app.get('/api/cart', verifyToken, (req, res) => {
       
       res.json({
         cart_id: cart.id,
-        items,
+        items: items,
         total: total.toFixed(2),
         item_count: items.length
       });
@@ -516,6 +538,7 @@ app.post('/api/cart/add', verifyToken, (req, res) => {
     return res.status(400).json({ error: 'Product ID is required' });
   }
   
+  // Check if product exists and has stock
   db.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
     if (err || !product) {
       return res.status(404).json({ error: 'Product not found' });
@@ -525,60 +548,80 @@ app.post('/api/cart/add', verifyToken, (req, res) => {
       return res.status(400).json({ error: 'Not enough stock available' });
     }
     
-    getOrCreateCart(userId, (err, cart) => {
+    // Get or create cart for user
+    db.get("SELECT id FROM cart WHERE user_id = ?", [userId], (err, cart) => {
       if (err) {
-        console.error(err);
+        console.error('Database error:', err);
         return res.status(500).json({ error: 'Database error' });
       }
       
-      db.get(
-        "SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?",
-        [cart.id, product_id],
-        (err, existingItem) => {
+      if (!cart) {
+        db.run("INSERT INTO cart (user_id) VALUES (?)", [userId], function(err) {
           if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error' });
+            console.error('Failed to create cart:', err);
+            return res.status(500).json({ error: 'Failed to create cart' });
           }
-          
-          if (existingItem) {
-            const newQuantity = existingItem.quantity + quantity;
-            db.run(
-              "UPDATE cart_items SET quantity = ? WHERE id = ?",
-              [newQuantity, existingItem.id],
-              function(err) {
-                if (err) {
-                  console.error(err);
-                  return res.status(500).json({ error: 'Failed to update cart' });
-                }
-                res.json({ 
-                  success: true, 
-                  message: 'Cart updated',
-                  item: { ...existingItem, quantity: newQuantity }
-                });
-              }
-            );
-          } else {
-            db.run(
-              "INSERT INTO cart_items (cart_id, product_id, quantity) VALUES (?, ?, ?)",
-              [cart.id, product_id, quantity],
-              function(err) {
-                if (err) {
-                  console.error(err);
-                  return res.status(500).json({ error: 'Failed to add to cart' });
-                }
-                res.json({ 
-                  success: true, 
-                  message: 'Item added to cart',
-                  item_id: this.lastID
-                });
-              }
-            );
-          }
-        }
-      );
+          addItemToCart(this.lastID, product_id, quantity, res);
+        });
+        return;
+      }
+      
+      addItemToCart(cart.id, product_id, quantity, res);
     });
   });
 });
+
+// Helper function to add item to cart
+function addItemToCart(cartId, productId, quantity, res) {
+  // Check if item already in cart
+  db.get(
+    "SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?",
+    [cartId, productId],
+    (err, existingItem) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (existingItem) {
+        // Update quantity
+        const newQuantity = existingItem.quantity + quantity;
+        db.run(
+          "UPDATE cart_items SET quantity = ? WHERE id = ?",
+          [newQuantity, existingItem.id],
+          function(err) {
+            if (err) {
+              console.error(err);
+              return res.status(500).json({ error: 'Failed to update cart' });
+            }
+            res.json({ 
+              success: true, 
+              message: 'Cart updated',
+              item: { ...existingItem, quantity: newQuantity }
+            });
+          }
+        );
+      } else {
+        // Add new item
+        db.run(
+          "INSERT INTO cart_items (cart_id, product_id, quantity) VALUES (?, ?, ?)",
+          [cartId, productId, quantity],
+          function(err) {
+            if (err) {
+              console.error(err);
+              return res.status(500).json({ error: 'Failed to add to cart' });
+            }
+            res.json({ 
+              success: true, 
+              message: 'Item added to cart',
+              item_id: this.lastID
+            });
+          }
+        );
+      }
+    }
+  );
+}
 
 // PUT - Update cart item quantity
 app.put('/api/cart/update/:itemId', verifyToken, (req, res) => {
@@ -779,7 +822,7 @@ app.post('/api/checkout', verifyToken, (req, res) => {
   });
 });
 
-// GET - User's orders
+// GET - User's orders (API)
 app.get('/api/my-orders', verifyToken, (req, res) => {
   const userId = req.user.id;
   
@@ -798,7 +841,7 @@ app.get('/api/my-orders', verifyToken, (req, res) => {
   });
 });
 
-// GET - Single order details
+// GET - Single order details (API)
 app.get('/api/order/:orderId', verifyToken, (req, res) => {
   const { orderId } = req.params;
   const userId = req.user.id;

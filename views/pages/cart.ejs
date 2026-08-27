@@ -52,6 +52,10 @@
             color: #D4AF37;
             font-weight: 600;
         }
+        .cart-item-info .quantity {
+            color: #888;
+            font-size: 0.9rem;
+        }
         .cart-summary {
             background: #1A1A1A;
             padding: 25px;
@@ -65,14 +69,38 @@
             color: #D4AF37;
             margin-bottom: 20px;
         }
-        .cart-summary p {
+        .cart-summary .total-row {
+            display: flex;
+            justify-content: space-between;
             color: #CCCCCC;
             font-size: 1.1rem;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
-        .cart-summary p strong {
+        .cart-summary .total-row strong {
             color: #D4AF37;
             font-size: 1.3rem;
+        }
+        .cart-summary .form-group {
+            margin-bottom: 15px;
+        }
+        .cart-summary .form-group label {
+            display: block;
+            color: #CCCCCC;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        .cart-summary .form-group input {
+            width: 100%;
+            padding: 10px;
+            background: #0D0D0D;
+            border: 2px solid #2D2D2D;
+            border-radius: 8px;
+            color: #FFFFFF;
+            font-size: 1rem;
+        }
+        .cart-summary .form-group input:focus {
+            outline: none;
+            border-color: #D4AF37;
         }
         .empty-state {
             text-align: center;
@@ -119,21 +147,25 @@
                                 <div class="cart-item-info">
                                     <h3><%= item.name %></h3>
                                     <p class="price">R <%= item.price.toFixed(2) %></p>
-                                    <p style="color: #888; font-size: 0.9rem;">Quantity: <%= item.quantity %></p>
+                                    <p class="quantity">Quantity: <%= item.quantity %></p>
                                 </div>
                             </div>
                         <% }) %>
                     </div>
                     <div class="cart-summary">
                         <h2>Order Summary</h2>
-                        <p>Total: <strong>R <%= locals.total %></strong></p>
-                        <p style="color: #888; font-size: 0.9rem;">Items: <%= locals.items.length %></p>
-                        <form action="/api/checkout" method="POST" id="checkoutForm">
-                            <div class="form-group" style="margin-bottom: 15px;">
-                                <label for="shipping_address" style="color: #CCCCCC; display: block; margin-bottom: 5px;">Shipping Address</label>
-                                <input type="text" id="shipping_address" name="shipping_address" 
-                                       placeholder="123 Main St, Cape Town" required
-                                       style="width: 100%; padding: 10px; background: #0D0D0D; border: 2px solid #2D2D2D; border-radius: 8px; color: #FFFFFF;">
+                        <div class="total-row">
+                            <span>Total:</span>
+                            <strong>R <%= locals.total %></strong>
+                        </div>
+                        <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px;">
+                            Items: <%= locals.items.length %>
+                        </p>
+                        <form id="checkoutForm">
+                            <div class="form-group">
+                                <label for="shipping_address">Shipping Address</label>
+                                <input type="text" id="shipping_address" 
+                                       placeholder="123 Main St, Cape Town" required />
                             </div>
                             <button type="submit" class="btn btn-primary btn-full">Place Order</button>
                         </form>
@@ -146,6 +178,61 @@
     </main>
 
     <script>
+        // Make sure addToCart is available
+        async function addToCart(productId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                document.getElementById('loginBtn')?.click();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/cart/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ product_id: productId, quantity: 1 })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Item added to cart!');
+                    loadCartCount();
+                } else {
+                    alert(data.error || 'Failed to add to cart');
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+
+        // Load cart count
+        async function loadCartCount() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            try {
+                const response = await fetch('/api/cart', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const badge = document.getElementById('cartBadge');
+                    if (badge) badge.textContent = data.item_count || 0;
+                }
+            } catch (error) {
+                console.error('Error loading cart:', error);
+            }
+        }
+
+        // Handle checkout
         document.getElementById('checkoutForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -156,6 +243,10 @@
             }
 
             const shipping_address = document.getElementById('shipping_address').value;
+            if (!shipping_address) {
+                alert('Please enter a shipping address.');
+                return;
+            }
 
             try {
                 const response = await fetch('/api/checkout', {
@@ -180,6 +271,9 @@
                 alert('An error occurred. Please try again.');
             }
         });
+
+        // Load cart count on page load
+        document.addEventListener('DOMContentLoaded', loadCartCount);
     </script>
 
     <%- include('../partials/footer', { user: locals.user }) %>
