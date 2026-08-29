@@ -56,12 +56,12 @@ a {
 .header {
     background: linear-gradient(180deg, #1A1A1A 0%, #0D0D0D 100%);
     border-bottom: 2px solid #D4AF37;
-    padding: 0.5rem 0;
+    padding: 0.3rem 0;
     position: sticky;
     top: 0;
     z-index: 1000;
     box-shadow: 0 2px 20px rgba(212, 175, 55, 0.15);
-    min-height: 70px;
+    min-height: 60px;
     display: flex;
     align-items: center;
 }
@@ -71,7 +71,7 @@ a {
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
 }
 
@@ -87,37 +87,34 @@ a {
     align-items: center;
     text-decoration: none;
     flex-shrink: 0;
+    padding: 2px 0;
 }
 
 .logo-image {
-    height: 45px;
+    height: 38px;
     width: auto;
-    max-height: 50px;
-    max-width: 200px;
+    max-height: 42px;
+    max-width: 160px;
     object-fit: contain;
     display: block;
 }
 
-.logo-text {
-    color: #D4AF37;
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: 1px;
-    margin-left: 10px;
-}
-
-.logo:hover .logo-text {
-    text-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
+@media (min-width: 1400px) {
+    .logo-image {
+        height: 42px;
+        max-height: 46px;
+    }
 }
 
 /* ===== NAVIGATION ===== */
 .nav {
     display: flex;
-    gap: 20px;
+    gap: 18px;
     align-items: center;
     flex-wrap: wrap;
     flex: 1;
     justify-content: center;
+    padding: 0 10px;
 }
 
 .nav a {
@@ -127,7 +124,7 @@ a {
     transition: color 0.3s ease;
     border-bottom: 2px solid transparent;
     padding-bottom: 4px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     white-space: nowrap;
 }
 
@@ -144,7 +141,7 @@ a {
 .header-right {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
     flex-shrink: 0;
 }
 
@@ -153,7 +150,7 @@ a {
     display: flex;
     align-items: center;
     background: #1A1A1A;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid #2D2D2D;
     overflow: hidden;
     transition: border-color 0.3s ease;
@@ -164,26 +161,28 @@ a {
 }
 
 .search-form input {
-    padding: 6px 10px;
+    padding: 5px 8px;
     background: transparent;
     border: none;
     color: #FFFFFF;
-    font-size: 0.85rem;
-    width: 120px;
+    font-size: 0.8rem;
+    width: 110px;
     outline: none;
 }
 
 .search-form input::placeholder {
     color: #555;
+    font-size: 0.75rem;
 }
 
 .search-form button {
-    padding: 6px 10px;
+    padding: 5px 8px;
     background: transparent;
     border: none;
     color: #888;
     cursor: pointer;
     transition: color 0.3s ease;
+    font-size: 0.8rem;
 }
 
 .search-form button:hover {
@@ -194,7 +193,7 @@ a {
 .cart-icon {
     color: #CCCCCC;
     text-decoration: none;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     position: relative;
     transition: color 0.3s ease;
     flex-shrink: 0;
@@ -208,23 +207,32 @@ a {
     background: #D4AF37;
     color: #1A1A1A;
     border-radius: 50%;
-    padding: 2px 7px;
-    font-size: 0.65rem;
+    padding: 1px 6px;
+    font-size: 0.6rem;
     font-weight: 700;
     position: absolute;
-    top: -8px;
-    right: -10px;
-    min-width: 18px;
+    top: -7px;
+    right: -8px;
+    min-width: 16px;
     text-align: center;
 }
 
 /* ===== AUTH BUTTONS ===== */
 .auth-buttons {
     display: flex;
-    gap: 10px;
+    gap: 8px;
 }
 
-/* ===== BUTTONS ===== */
+.auth-buttons .btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    border-radius: 4px;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
 .btn {
     display: inline-block;
     padding: 10px 24px;
@@ -274,7 +282,10 @@ a {
     font-size: 1.1rem;
 }
 
-/* ===== USER MENU ===== */
+/* ============================================================
+   USER MENU
+   ============================================================ */
+
 .user-menu {
     position: relative;
     display: none;
@@ -287,14 +298,14 @@ a {
 .user-avatar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     background: transparent;
     border: none;
     color: #CCCCCC;
     cursor: pointer;
-    font-size: 0.9rem;
-    padding: 6px 12px;
-    border-radius: 6px;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+    border-radius: 4px;
     transition: all 0.3s ease;
 }
 
@@ -304,28 +315,29 @@ a {
 }
 
 .avatar-circle {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     background: #D4AF37;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #1A1A1A;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: 700;
 }
 
 .user-name-display {
     font-weight: 500;
-    max-width: 120px;
+    max-width: 100px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.8rem;
 }
 
 .user-avatar .fa-chevron-down {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     color: #666;
     transition: transform 0.3s ease;
 }
@@ -342,7 +354,7 @@ a {
     background: #1A1A1A;
     border: 1px solid #2D2D2D;
     border-radius: 12px;
-    min-width: 240px;
+    min-width: 220px;
     padding: 8px 0;
     margin-top: 8px;
     display: none;
@@ -375,15 +387,15 @@ a {
 }
 
 .dropdown-avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     background: #D4AF37;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #1A1A1A;
-    font-size: 1.2rem;
+    font-size: 1rem;
 }
 
 .dropdown-user-details {
@@ -394,12 +406,12 @@ a {
 
 .dropdown-user-details strong {
     color: #FFFFFF;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .dropdown-user-details span {
     color: #888;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
 }
 
 .dropdown-user-role {
@@ -408,7 +420,7 @@ a {
     color: #D4AF37;
     padding: 1px 10px;
     border-radius: 12px;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 600;
     margin-top: 2px;
     width: fit-content;
@@ -420,9 +432,9 @@ a {
     gap: 12px;
     color: #CCCCCC;
     text-decoration: none;
-    padding: 10px 20px;
+    padding: 8px 20px;
     transition: all 0.2s ease;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .dropdown-menu a:hover {
@@ -434,6 +446,7 @@ a {
     width: 18px;
     text-align: center;
     color: #666;
+    font-size: 0.9rem;
 }
 
 .dropdown-menu a:hover i {
@@ -468,22 +481,29 @@ a {
     background: none;
     border: none;
     color: #CCCCCC;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     cursor: pointer;
+    padding: 4px 8px;
+}
+
+.mobile-menu-toggle:hover {
+    color: #D4AF37;
 }
 
 .mobile-menu {
     display: none;
     position: fixed;
-    top: 70px;
+    top: 55px;
     left: 0;
     right: 0;
     background: #0D0D0D;
-    padding: 20px;
+    padding: 15px 20px;
     border-bottom: 2px solid #D4AF37;
     z-index: 999;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
+    max-height: calc(100vh - 55px);
+    overflow-y: auto;
 }
 
 .mobile-menu.active {
@@ -493,9 +513,10 @@ a {
 .mobile-menu a {
     color: #CCCCCC;
     text-decoration: none;
-    padding: 10px 0;
+    padding: 8px 0;
     border-bottom: 1px solid #2D2D2D;
     transition: color 0.3s ease;
+    font-size: 0.9rem;
 }
 
 .mobile-menu a:hover {
@@ -1736,6 +1757,26 @@ a {
 }
 
 /* ============================================================
+   WISHLIST
+   ============================================================ */
+
+.wishlist-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+    font-size: 1.2rem;
+}
+
+.wishlist-empty a {
+    color: #D4AF37;
+    text-decoration: none;
+}
+
+.wishlist-empty a:hover {
+    text-decoration: underline;
+}
+
+/* ============================================================
    FOOTER
    ============================================================ */
 
@@ -1798,31 +1839,36 @@ a {
    ============================================================ */
 
 @media (max-width: 1024px) {
+    .logo-image {
+        height: 32px;
+        max-height: 36px;
+        max-width: 130px;
+    }
+    
     .nav {
         gap: 12px;
     }
+    
     .nav a {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
     }
+    
     .search-form input {
         width: 80px;
+        font-size: 0.75rem;
     }
 }
 
 @media (max-width: 768px) {
     .header {
-        padding: 0.4rem 0;
-        min-height: 60px;
+        padding: 0.25rem 0;
+        min-height: 55px;
     }
     
     .logo-image {
-        height: 35px;
-        max-height: 40px;
-        max-width: 150px;
-    }
-    
-    .logo-text {
-        font-size: 1.2rem;
+        height: 28px;
+        max-height: 32px;
+        max-width: 110px;
     }
     
     .nav {
@@ -1831,37 +1877,58 @@ a {
     
     .mobile-menu-toggle {
         display: block;
+        font-size: 1.2rem;
     }
     
     .search-form input {
-        width: 60px;
-        font-size: 0.75rem;
+        width: 50px;
+        font-size: 0.7rem;
+    }
+    
+    .search-form input::placeholder {
+        font-size: 0.65rem;
     }
     
     .search-form {
-        border-radius: 6px;
+        border-radius: 4px;
     }
     
     .search-form input {
-        padding: 4px 8px;
+        padding: 3px 6px;
     }
     
     .search-form button {
-        padding: 4px 8px;
-        font-size: 0.8rem;
+        padding: 3px 6px;
+        font-size: 0.7rem;
     }
     
     .header-right {
-        gap: 10px;
+        gap: 8px;
     }
     
     .cart-icon {
-        font-size: 1rem;
+        font-size: 0.95rem;
     }
     
     .auth-buttons .btn {
-        padding: 6px 12px;
+        padding: 4px 10px;
+        font-size: 0.7rem;
+    }
+    
+    .user-avatar {
+        padding: 3px 6px;
         font-size: 0.75rem;
+    }
+    
+    .avatar-circle {
+        width: 24px;
+        height: 24px;
+        font-size: 0.6rem;
+    }
+    
+    .user-name-display {
+        max-width: 60px;
+        font-size: 0.7rem;
     }
     
     .hero h1 {
@@ -1881,12 +1948,8 @@ a {
         padding: 24px;
     }
     
-    .user-name-display {
-        display: none;
-    }
-    
     .dropdown-menu {
-        min-width: 200px;
+        min-width: 180px;
         right: -10px;
     }
     
@@ -1953,35 +2016,59 @@ a {
 }
 
 @media (max-width: 480px) {
-    .logo-image {
-        height: 28px;
-        max-height: 32px;
-        max-width: 120px;
+    .header {
+        min-height: 48px;
+        padding: 0.2rem 0;
     }
     
-    .logo-text {
-        font-size: 1rem;
+    .logo-image {
+        height: 22px;
+        max-height: 26px;
+        max-width: 90px;
     }
     
     .search-form input {
-        width: 40px;
+        width: 35px;
+        font-size: 0.6rem;
     }
     
     .search-form input::placeholder {
-        font-size: 0.65rem;
+        font-size: 0.55rem;
     }
     
     .header-right {
-        gap: 6px;
+        gap: 5px;
     }
     
     .auth-buttons .btn {
-        padding: 4px 8px;
-        font-size: 0.65rem;
+        padding: 3px 6px;
+        font-size: 0.6rem;
     }
     
     .cart-icon {
-        font-size: 0.9rem;
+        font-size: 0.8rem;
+    }
+    
+    .cart-badge {
+        font-size: 0.5rem;
+        padding: 1px 4px;
+        min-width: 12px;
+        top: -6px;
+        right: -6px;
+    }
+    
+    .user-avatar {
+        padding: 2px 4px;
+    }
+    
+    .avatar-circle {
+        width: 20px;
+        height: 20px;
+        font-size: 0.5rem;
+    }
+    
+    .user-name-display {
+        display: none;
     }
     
     .hero h1 {
