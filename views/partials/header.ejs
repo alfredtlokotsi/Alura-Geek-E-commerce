@@ -1,9 +1,17 @@
 <header class="header">
     <div class="container">
         <div class="header-left">
-            <a href="/" class="logo">✨ Explore Essence</a>
+            <a href="/" class="logo">
+                <img src="/images/logo/explore_essence_logo.png" alt="Explore Essence" class="logo-image" />
+            </a>
         </div>
-        <nav class="nav">
+        
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <nav class="nav" id="mainNav">
             <a href="/">Home</a>
             <a href="/products">Shop</a>
             <a href="/category/perfumes">Perfumes</a>
@@ -16,7 +24,14 @@
                 <a href="/admin" class="admin-link">👑 Admin</a>
             <% } %>
         </nav>
+        
         <div class="header-right">
+            <!-- Search -->
+            <form action="/search" method="GET" class="search-form">
+                <input type="text" name="q" placeholder="Search..." aria-label="Search" />
+                <button type="submit"><i class="fas fa-search"></i></button>
+            </form>
+            
             <!-- Cart Icon -->
             <a href="/cart" class="cart-icon" id="cartIcon">
                 <i class="fas fa-shopping-cart"></i>
@@ -52,6 +67,7 @@
                         <hr />
                         <a href="/profile"><i class="fas fa-user"></i> Profile</a>
                         <a href="/orders"><i class="fas fa-box"></i> My Orders</a>
+                        <a href="/wishlist"><i class="fas fa-heart"></i> Wishlist</a>
                         <% if (user.role === 'admin') { %>
                             <a href="/admin"><i class="fas fa-crown"></i> Admin Dashboard</a>
                             <a href="/database"><i class="fas fa-database"></i> Database</a>
@@ -66,6 +82,25 @@
         </div>
     </div>
 </header>
+
+<!-- Mobile Menu -->
+<div class="mobile-menu" id="mobileMenu">
+    <a href="/">Home</a>
+    <a href="/products">Shop All</a>
+    <a href="/category/perfumes">Perfumes</a>
+    <a href="/category/fans">Fans</a>
+    <a href="/category/ties">Ties</a>
+    <a href="/category/suits">Suits</a>
+    <a href="/category/tools">Tools</a>
+    <a href="/about">About</a>
+    <% if (user && user.role === 'admin') { %>
+        <a href="/admin">👑 Admin</a>
+    <% } %>
+    <hr />
+    <a href="/cart">🛒 Cart</a>
+    <a href="/orders">📦 Orders</a>
+    <a href="/wishlist">❤️ Wishlist</a>
+</div>
 
 <!-- MODALS -->
 <div class="modal" id="loginModal">
@@ -83,10 +118,17 @@
                 <label for="loginPassword">Password</label>
                 <input type="password" id="loginPassword" placeholder="Enter your password" required />
             </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+                <input type="checkbox" id="rememberMe" />
+                <label for="rememberMe" style="color:#888;font-weight:400;">Remember Me</label>
+            </div>
             <div class="form-error" id="loginError"></div>
             <button type="submit" class="btn btn-primary btn-full">Log In</button>
             <p class="form-footer">
                 Don't have an account? <a href="#" id="switchToSignup">Sign up</a>
+            </p>
+            <p class="form-footer">
+                <a href="#" id="forgotPasswordLink" style="color:#888;font-size:0.85rem;">Forgot Password?</a>
             </p>
         </form>
     </div>
@@ -121,5 +163,17 @@
 </div>
 
 <script>
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobileMenu');
+        menu.classList.toggle('active');
+    }
+
+    // Close mobile menu when clicking a link
+    document.querySelectorAll('#mobileMenu a').forEach(link => {
+        link.addEventListener('click', () => {
+            document.getElementById('mobileMenu').classList.remove('active');
+        });
+    });
+
     // Auth functions will be loaded from /js/auth.js
 </script>

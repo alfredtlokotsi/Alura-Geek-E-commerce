@@ -52,9 +52,42 @@
             color: #D4AF37;
             font-weight: 600;
         }
-        .cart-item-info .quantity {
-            color: #888;
-            font-size: 0.9rem;
+        .cart-item-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .qty-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid #2D2D2D;
+            background: transparent;
+            color: #FFFFFF;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        .qty-btn:hover {
+            border-color: #D4AF37;
+            color: #D4AF37;
+        }
+        .qty-number {
+            color: #FFFFFF;
+            font-weight: 600;
+            min-width: 30px;
+            text-align: center;
+        }
+        .remove-btn {
+            background: transparent;
+            border: none;
+            color: #FF4444;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+        }
+        .remove-btn:hover {
+            color: #FF6B6B;
         }
         .cart-summary {
             background: #1A1A1A;
@@ -69,38 +102,30 @@
             color: #D4AF37;
             margin-bottom: 20px;
         }
-        .cart-summary .total-row {
+        .cart-summary .summary-row {
             display: flex;
             justify-content: space-between;
             color: #CCCCCC;
-            font-size: 1.1rem;
-            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #2D2D2D;
         }
-        .cart-summary .total-row strong {
-            color: #D4AF37;
-            font-size: 1.3rem;
+        .cart-summary .summary-row:last-child {
+            border-bottom: none;
+            font-size: 1.2rem;
+            font-weight: 700;
         }
-        .cart-summary .form-group {
-            margin-bottom: 15px;
+        .cart-summary .summary-row .label {
+            color: #888;
         }
-        .cart-summary .form-group label {
-            display: block;
-            color: #CCCCCC;
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-        }
-        .cart-summary .form-group input {
-            width: 100%;
-            padding: 10px;
-            background: #0D0D0D;
-            border: 2px solid #2D2D2D;
-            border-radius: 8px;
+        .cart-summary .summary-row .value {
             color: #FFFFFF;
-            font-size: 1rem;
         }
-        .cart-summary .form-group input:focus {
-            outline: none;
-            border-color: #D4AF37;
+        .cart-summary .summary-row .value.gold {
+            color: #D4AF37;
+        }
+        .cart-summary .btn {
+            width: 100%;
+            margin-top: 15px;
         }
         .empty-state {
             text-align: center;
@@ -136,39 +161,46 @@
         <div class="container">
             <h1 class="page-title">Your <span class="gold">Cart</span></h1>
             
-            <% if (locals.items && locals.items.length > 0) { %>
+            <% if (items && items.length > 0) { %>
                 <div class="cart-grid">
                     <div class="cart-items">
-                        <% locals.items.forEach(item => { %>
-                            <div class="cart-item">
+                        <% items.forEach(item => { %>
+                            <div class="cart-item" id="cart-item-<%= item.id %>">
                                 <img src="/images/<%= item.image_url || 'placeholder.jpg' %>" 
                                      alt="<%= item.name %>" 
                                      onerror="this.src='/images/placeholder.jpg'">
                                 <div class="cart-item-info">
                                     <h3><%= item.name %></h3>
-                                    <p class="price">R <%= item.price.toFixed(2) %></p>
-                                    <p class="quantity">Quantity: <%= item.quantity %></p>
+                                    <p class="price">R <%= parseFloat(item.price).toFixed(2) %></p>
+                                </div>
+                                <div class="cart-item-actions">
+                                    <button class="qty-btn" onclick="updateQuantity(<%= item.id %>, -1)">−</button>
+                                    <span class="qty-number" id="qty-<%= item.id %>"><%= item.quantity %></span>
+                                    <button class="qty-btn" onclick="updateQuantity(<%= item.id %>, 1)">+</button>
+                                    <button class="remove-btn" onclick="removeItem(<%= item.id %>)">✕</button>
                                 </div>
                             </div>
                         <% }) %>
                     </div>
                     <div class="cart-summary">
                         <h2>Order Summary</h2>
-                        <div class="total-row">
-                            <span>Total:</span>
-                            <strong>R <%= locals.total %></strong>
+                        <div class="summary-row">
+                            <span class="label">Subtotal</span>
+                            <span class="value">R <%= subtotal %></span>
                         </div>
-                        <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px;">
-                            Items: <%= locals.items.length %>
-                        </p>
-                        <form id="checkoutForm">
-                            <div class="form-group">
-                                <label for="shipping_address">Shipping Address</label>
-                                <input type="text" id="shipping_address" 
-                                       placeholder="123 Main St, Cape Town" required />
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-full">Place Order</button>
-                        </form>
+                        <div class="summary-row">
+                            <span class="label">Tax (15%)</span>
+                            <span class="value">R <%= tax %></span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="label">Shipping</span>
+                            <span class="value"><%= shipping == '0.00' ? 'Free' : 'R ' + shipping %></span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="label">Total</span>
+                            <span class="value gold">R <%= total %></span>
+                        </div>
+                        <a href="/checkout" class="btn btn-primary">Proceed to Checkout</a>
                     </div>
                 </div>
             <% } else { %>
@@ -178,102 +210,60 @@
     </main>
 
     <script>
-        // Make sure addToCart is available
-        async function addToCart(productId) {
+        async function updateQuantity(itemId, change) {
             const token = localStorage.getItem('token');
-            if (!token) {
-                alert('Please log in first!');
-                document.getElementById('loginBtn')?.click();
-                return;
-            }
+            const qtyElement = document.getElementById(`qty-${itemId}`);
+            let currentQty = parseInt(qtyElement.textContent);
+            let newQty = currentQty + change;
+            
+            if (newQty < 1) return;
 
             try {
-                const response = await fetch('/api/cart/add', {
-                    method: 'POST',
+                const response = await fetch(`/api/cart/update/${itemId}`, {
+                    method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ product_id: productId, quantity: 1 })
+                    body: JSON.stringify({ quantity: newQty })
                 });
 
-                const data = await response.json();
-                
                 if (response.ok) {
-                    alert('✅ Item added to cart!');
-                    loadCartCount();
+                    window.location.reload();
                 } else {
-                    alert(data.error || 'Failed to add to cart');
+                    const data = await response.json();
+                    alert(data.error || 'Failed to update cart');
                 }
             } catch (error) {
-                console.error('Error adding to cart:', error);
+                console.error('Error updating cart:', error);
                 alert('An error occurred. Please try again.');
             }
         }
 
-        // Load cart count
-        async function loadCartCount() {
+        async function removeItem(itemId) {
+            if (!confirm('Remove this item from cart?')) return;
+
             const token = localStorage.getItem('token');
-            if (!token) return;
 
             try {
-                const response = await fetch('/api/cart', {
+                const response = await fetch(`/api/cart/remove/${itemId}`, {
+                    method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
+
                 if (response.ok) {
-                    const data = await response.json();
-                    const badge = document.getElementById('cartBadge');
-                    if (badge) badge.textContent = data.item_count || 0;
-                }
-            } catch (error) {
-                console.error('Error loading cart:', error);
-            }
-        }
-
-        // Handle checkout
-        document.getElementById('checkoutForm')?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const token = localStorage.getItem('token');
-            if (!token) {
-                alert('Please log in first!');
-                return;
-            }
-
-            const shipping_address = document.getElementById('shipping_address').value;
-            if (!shipping_address) {
-                alert('Please enter a shipping address.');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/checkout', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ shipping_address })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                    alert('✅ Order placed successfully!');
-                    window.location.href = '/orders';
+                    window.location.reload();
                 } else {
-                    alert(data.error || 'Failed to place order');
+                    const data = await response.json();
+                    alert(data.error || 'Failed to remove item');
                 }
             } catch (error) {
-                console.error('Error placing order:', error);
+                console.error('Error removing item:', error);
                 alert('An error occurred. Please try again.');
             }
-        });
-
-        // Load cart count on page load
-        document.addEventListener('DOMContentLoaded', loadCartCount);
+        }
     </script>
 
     <%- include('../partials/footer', { user: locals.user }) %>

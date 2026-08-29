@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Wishlist | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="container">
+            <h1 class="page-title">❤️ My <span class="gold">Wishlist</span></h1>
+            
+            <% if (products && products.length > 0) { %>
+                <div class="product-grid">
+                    <% products.forEach(product => { %>
+                        <div class="product-card">
+                            <span class="featured-badge">❤️</span>
+                            <img src="/images/<%= product.image_url || 'placeholder.jpg' %>" 
+                                 alt="<%= product.name %>" 
+                                 onerror="this.src='/images/placeholder.jpg'">
+                            <div class="info">
+                                <h3><%= product.name %></h3>
+                                <p class="price">R <%= parseFloat(product.price).toFixed(2) %></p>
+                                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                    <button class="btn btn-primary btn-sm" onclick="addToCart(<%= product.id %>)">
+                                        <i class="fas fa-cart-plus"></i> Add
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" onclick="removeFromWishlist(<%= product.id %>)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <p class="empty-state" style="text-align:center;padding:60px 20px;color:#888;font-size:1.2rem;">
+                    ❤️ Your wishlist is empty. <a href="/products" style="color:#D4AF37;">Start shopping</a>
+                </p>
+            <% } %>
+        </div>
+    </main>
+
+    <script>
+        async function addToCart(productId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/cart/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ product_id: productId, quantity: 1 })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showNotification('✅ Item added to cart!', 'success');
+                    const badge = document.getElementById('cartBadge');
+                    if (badge) {
+                        const current = parseInt(badge.textContent) || 0;
+                        badge.textContent = current + 1;
+                    }
+                } else {
+                    showNotification(data.error || 'Failed to add to cart', 'error');
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                showNotification('An error occurred. Please try again.', 'error');
+            }
+        }
+
+        async function removeFromWishlist(productId) {
+            if (!confirm('Remove from wishlist?')) return;
+
+            const token = localStorage.getItem('token');
+
+            try {
+                const response = await fetch(`/api/wishlist/remove/${productId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Failed to remove from wishlist');
+                }
+            } catch (error) {
+                console.error('Error removing from wishlist:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const colors = {
+                success: '#D4AF37',
+                error: '#FF4444',
+                info: '#3498db'
+            };
+            
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 16px 24px;
+                background: #1A1A1A;
+                color: #FFFFFF;
+                border-left: 4px solid ${colors[type] || '#888'};
+                border-radius: 8px;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+                z-index: 9999;
+                max-width: 400px;
+                animation: slideIn 0.3s ease;
+                font-size: 0.95rem;
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
+</body>
+</html>

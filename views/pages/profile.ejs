@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Profile | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        .profile-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            padding: 30px;
+            background: #1A1A1A;
+            border-radius: 16px;
+            border: 1px solid #2D2D2D;
+            margin-bottom: 30px;
+        }
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            background: #D4AF37;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: #1A1A1A;
+        }
+        .profile-info h1 {
+            color: #FFFFFF;
+            font-size: 1.8rem;
+        }
+        .profile-info p {
+            color: #888;
+        }
+        .profile-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-box {
+            background: #1A1A1A;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #2D2D2D;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .stat-box:hover {
+            border-color: #D4AF37;
+        }
+        .stat-box .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #D4AF37;
+        }
+        .stat-box .stat-label {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .stat-box a {
+            color: #D4AF37;
+            text-decoration: none;
+        }
+        .profile-form {
+            background: #1A1A1A;
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #2D2D2D;
+        }
+        .profile-form h2 {
+            color: #D4AF37;
+            margin-bottom: 20px;
+        }
+        .profile-form .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 768px) {
+            .profile-header {
+                flex-direction: column;
+                text-align: center;
+            }
+            .profile-form .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="profile-container">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="profile-info">
+                    <h1><%= profile.name %></h1>
+                    <p><%= profile.email %></p>
+                    <p style="color: #D4AF37; text-transform: capitalize;"><%= profile.role %></p>
+                </div>
+            </div>
+
+            <div class="profile-stats">
+                <div class="stat-box">
+                    <div class="stat-number"><%= stats.orders %></div>
+                    <div class="stat-label"><a href="/orders">📦 Orders</a></div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number"><%= stats.wishlist %></div>
+                    <div class="stat-label"><a href="/wishlist">❤️ Wishlist</a></div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number"><%= stats.cart %></div>
+                    <div class="stat-label"><a href="/cart">🛒 Cart Items</a></div>
+                </div>
+            </div>
+
+            <div class="profile-form">
+                <h2>👤 Edit Profile</h2>
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label for="profile_name">Full Name</label>
+                        <input type="text" id="profile_name" value="<%= profile.name %>" />
+                    </div>
+                    <div class="form-group">
+                        <label for="profile_email">Email</label>
+                        <input type="email" id="profile_email" value="<%= profile.email %>" disabled />
+                        <small style="color:#555;">Email cannot be changed</small>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="profile_password">New Password</label>
+                            <input type="password" id="profile_password" placeholder="Leave blank to keep current" />
+                        </div>
+                        <div class="form-group">
+                            <label for="profile_confirm">Confirm Password</label>
+                            <input type="password" id="profile_confirm" placeholder="Confirm new password" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                return;
+            }
+
+            const name = document.getElementById('profile_name').value;
+            const password = document.getElementById('profile_password').value;
+            const confirm = document.getElementById('profile_confirm').value;
+
+            if (password && password !== confirm) {
+                alert('Passwords do not match!');
+                return;
+            }
+
+            const data = { name };
+            if (password) data.password = password;
+
+            try {
+                const response = await fetch('/api/auth/update-profile', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Profile updated successfully!');
+                    window.location.reload();
+                } else {
+                    alert(result.error || 'Failed to update profile');
+                }
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+    </script>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
+</body>
+</html>

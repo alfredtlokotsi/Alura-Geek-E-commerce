@@ -1,79 +1,237 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Checkout | Explore Essence</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Checkout | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        .checkout-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .checkout-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+        }
+        .checkout-form {
+            background: #1A1A1A;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #2D2D2D;
+        }
+        .checkout-form h2 {
+            color: #D4AF37;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            color: #CCCCCC;
+            font-weight: 500;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0D0D0D;
+            border: 2px solid #2D2D2D;
+            border-radius: 8px;
+            color: #FFFFFF;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #D4AF37;
+        }
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .checkout-summary {
+            background: #1A1A1A;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #2D2D2D;
+            height: fit-content;
+        }
+        .checkout-summary h2 {
+            color: #D4AF37;
+            margin-bottom: 15px;
+        }
+        .checkout-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #2D2D2D;
+            color: #CCCCCC;
+            font-size: 0.9rem;
+        }
+        .checkout-item:last-child {
+            border-bottom: none;
+        }
+        .checkout-total {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #D4AF37;
+        }
+        .checkout-total .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+        }
+        .checkout-total .total-row .label {
+            color: #888;
+        }
+        .checkout-total .total-row .value {
+            color: #FFFFFF;
+        }
+        .checkout-total .total-row .value.gold {
+            color: #D4AF37;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .btn-full {
+            width: 100%;
+            padding: 14px;
+            font-size: 1.1rem;
+            margin-top: 15px;
+        }
+        @media (max-width: 768px) {
+            .checkout-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-  <%- include('../partials/header') %>
-  
-  <main>
-    <div class="container">
-      <div class="checkout-box">
-        <h1>✨ Checkout</h1>
-        
-        <div class="product-summary">
-          <p><strong>Product:</strong> <%= product.name %></p>
-          <p><strong>Price:</strong> R <%= product.price.toFixed(2) %></p>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <main>
+        <div class="checkout-container">
+            <h1 class="page-title">Checkout</h1>
+            
+            <div class="checkout-grid">
+                <div class="checkout-form">
+                    <h2>📋 Shipping Details</h2>
+                    <form id="checkoutForm">
+                        <div class="form-group">
+                            <label for="full_name">Full Name</label>
+                            <input type="text" id="full_name" placeholder="John Doe" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" placeholder="you@example.com" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input type="tel" id="phone" placeholder="+27 82 123 4567" />
+                        </div>
+                        <div class="form-group">
+                            <label for="address">Shipping Address</label>
+                            <textarea id="address" placeholder="123 Main St, Cape Town, 8001" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="payment_method">Payment Method</label>
+                            <select id="payment_method">
+                                <option value="cash_on_delivery">Cash on Delivery</option>
+                                <option value="payfast">PayFast (Credit Card / EFT)</option>
+                                <option value="yoco">Yoco</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <i class="fas fa-check"></i> Place Order
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="checkout-summary">
+                    <h2>📦 Order Summary</h2>
+                    <% items.forEach(item => { %>
+                        <div class="checkout-item">
+                            <span><%= item.quantity %>x <%= item.name %></span>
+                            <span>R <%= (parseFloat(item.price) * item.quantity).toFixed(2) %></span>
+                        </div>
+                    <% }) %>
+                    <div class="checkout-total">
+                        <div class="total-row">
+                            <span class="label">Subtotal</span>
+                            <span class="value">R <%= subtotal %></span>
+                        </div>
+                        <div class="total-row">
+                            <span class="label">Tax (15%)</span>
+                            <span class="value">R <%= tax %></span>
+                        </div>
+                        <div class="total-row">
+                            <span class="label">Shipping</span>
+                            <span class="value"><%= shipping == '0.00' ? 'Free' : 'R ' + shipping %></span>
+                        </div>
+                        <div class="total-row">
+                            <span class="label">Total</span>
+                            <span class="value gold">R <%= total %></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+    </main>
 
-        <form action="/api/create-order" method="POST" id="checkoutForm">
-          <input type="hidden" name="product_id" value="<%= product.id %>">
-          
-          <div class="form-group">
-            <label for="customer_email">📧 Email Address</label>
-            <input type="email" id="customer_email" name="customer_email" placeholder="you@example.com" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="quantity">📦 Quantity</label>
-            <input type="number" id="quantity" name="quantity" value="1" min="1" max="<%= product.stock %>">
-          </div>
+    <script>
+        document.getElementById('checkoutForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                return;
+            }
 
-          <button type="submit" class="btn btn-primary btn-large" style="width: 100%;">
-            💳 Generate Payment Link
-          </button>
-        </form>
-      </div>
-    </div>
-  </main>
+            const shipping_address = document.getElementById('address').value;
+            const payment_method = document.getElementById('payment_method').value;
 
-  <script>
-    document.getElementById('checkoutForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      
-      const formData = new FormData(this);
-      const data = {
-        product_id: formData.get('product_id'),
-        customer_email: formData.get('customer_email'),
-        quantity: parseInt(formData.get('quantity')) || 1
-      };
+            if (!shipping_address) {
+                alert('Please enter a shipping address.');
+                return;
+            }
 
-      try {
-        const response = await fetch('/api/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+            try {
+                const response = await fetch('/api/checkout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ shipping_address, payment_method })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Order placed successfully!');
+                    window.location.href = '/orders';
+                } else {
+                    alert(data.error || 'Failed to place order');
+                }
+            } catch (error) {
+                console.error('Error placing order:', error);
+                alert('An error occurred. Please try again.');
+            }
         });
-        
-        const result = await response.json();
-        
-        if (result.paymentLink) {
-          window.location.href = result.paymentLink;
-        } else {
-          alert('Error creating order: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        alert('An error occurred. Please try again.');
-        console.error(error);
-      }
-    });
-  </script>
+    </script>
 
-  <%- include('../partials/footer') %>
+    <%- include('../partials/footer', { user: locals.user }) %>
 </body>
 </html>
