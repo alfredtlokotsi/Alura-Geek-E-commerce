@@ -6,6 +6,11 @@
         <nav class="nav">
             <a href="/">Home</a>
             <a href="/products">Shop</a>
+            <a href="/category/perfumes">Perfumes</a>
+            <a href="/category/fans">Fans</a>
+            <a href="/category/ties">Ties</a>
+            <a href="/category/suits">Suits</a>
+            <a href="/category/tools">Tools</a>
             <a href="/about">About</a>
             <% if (user && user.role === 'admin') { %>
                 <a href="/admin" class="admin-link">👑 Admin</a>
@@ -18,28 +23,43 @@
                 <span class="cart-badge" id="cartBadge">0</span>
             </a>
             
-            <!-- Auth Buttons (shown when logged out) -->
+            <!-- Auth Buttons -->
             <% if (!user) { %>
                 <div class="auth-buttons" id="authButtons">
                     <button class="btn btn-outline" id="loginBtn">Log In</button>
                     <button class="btn btn-primary" id="signupBtn">Sign Up</button>
                 </div>
             <% } else { %>
-                <!-- User Menu (shown when logged in) -->
                 <div class="user-menu active" id="userMenu">
                     <button class="user-avatar" id="userAvatar">
-                        <i class="fas fa-user"></i>
-                        <span id="userName"><%= user.name %></span>
+                        <div class="avatar-circle">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <span class="user-name-display" id="userName"><%= user.name %></span>
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="dropdownMenu">
+                        <div class="dropdown-user-info">
+                            <div class="dropdown-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="dropdown-user-details">
+                                <strong id="dropdownUserName"><%= user.name %></strong>
+                                <span id="dropdownUserEmail"><%= user.email %></span>
+                                <span class="dropdown-user-role"><%= user.role || 'User' %></span>
+                            </div>
+                        </div>
+                        <hr />
                         <a href="/profile"><i class="fas fa-user"></i> Profile</a>
                         <a href="/orders"><i class="fas fa-box"></i> My Orders</a>
                         <% if (user.role === 'admin') { %>
                             <a href="/admin"><i class="fas fa-crown"></i> Admin Dashboard</a>
+                            <a href="/database"><i class="fas fa-database"></i> Database</a>
                         <% } %>
                         <hr />
-                        <a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Log Out</a>
+                        <a href="#" id="logoutBtn" class="logout-link">
+                            <i class="fas fa-sign-out-alt"></i> Log Out
+                        </a>
                     </div>
                 </div>
             <% } %>
@@ -47,8 +67,7 @@
     </div>
 </header>
 
-<!-- ===== MODALS ===== -->
-<!-- Login Modal -->
+<!-- MODALS -->
 <div class="modal" id="loginModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -73,7 +92,6 @@
     </div>
 </div>
 
-<!-- Signup Modal -->
 <div class="modal" id="signupModal">
     <div class="modal-content">
         <div class="modal-header">

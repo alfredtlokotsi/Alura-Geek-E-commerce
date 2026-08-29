@@ -6,7 +6,7 @@ const { verifyToken, verifyAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-module.exports = (db) => {
+module.exports = (pool) => {
   
   // --- SIGNUP ---
   router.post('/signup', [
@@ -22,53 +22,44 @@ module.exports = (db) => {
     const { name, email, password, role = 'user' } = req.body;
 
     try {
-      db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        
-        if (user) {
-          return res.status(400).json({ error: 'Email already registered' });
-        }
+      // Check if user exists
+      const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+      if (existing.rows.length > 0) {
+        return res.status(400).json({ error: 'Email already registered' });
+      }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
 
-        const userRole = (role === 'admin') ? 'admin' : 'user';
+      const userRole = (role === 'admin') ? 'admin' : 'user';
 
-        db.run(
-          `INSERT INTO users (name, email, password, role, created_at) 
-           VALUES (?, ?, ?, ?, datetime('now'))`,
-          [name, email, hashedPassword, userRole],
-          function(err) {
-            if (err) {
-              console.error(err);
-              return res.status(500).json({ error: 'Failed to create user' });
-            }
+      const result = await pool.query(
+        `INSERT INTO users (name, email, password, role, created_at) 
+         VALUES ($1, $2, $3, $4, NOW()) RETURNING id, name, email, role`,
+        [name, email, hashedPassword, userRole]
+      );
 
-            const token = jwt.sign(
-              { id: this.lastID, email, name, role: userRole },
-              process.env.JWT_SECRET,
-              { expiresIn: process.env.JWT_EXPIRE || '7d' }
-            );
+      const user = result.rows[0];
 
-            // Set cookie for page loads
-            res.cookie('token', token, {
-              httpOnly: false,
-              secure: false,
-              maxAge: 7 * 24 * 60 * 60 * 1000,
-              sameSite: 'lax',
-              path: '/'
-            });
+      const token = jwt.sign(
+        { id: user.id, email: user.email, name: user.name, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRE || '7d' }
+      );
 
-            res.status(201).json({
-              success: true,
-              token,
-              user: { id: this.lastID, name, email, role: userRole }
-            });
-          }
-        );
+      // Set cookie for page loads
+      res.cookie('token', token, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: 'lax',
+        path: '/'
+      });
+
+      res.status(201).json({
+        success: true,
+        token,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role }
       });
     } catch (error) {
       console.error(error);
@@ -89,41 +80,36 @@ module.exports = (db) => {
     const { email, password } = req.body;
 
     try {
-      db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Database error' });
-        }
+      const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+      if (result.rows.length === 0) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
 
-        if (!user) {
-          return res.status(401).json({ error: 'Invalid email or password' });
-        }
+      const user = result.rows[0];
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-          return res.status(401).json({ error: 'Invalid email or password' });
-        }
+      const token = jwt.sign(
+        { id: user.id, email: user.email, name: user.name, role: user.role || 'user' },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRE || '7d' }
+      );
 
-        const token = jwt.sign(
-          { id: user.id, email: user.email, name: user.name, role: user.role || 'user' },
-          process.env.JWT_SECRET,
-          { expiresIn: process.env.JWT_EXPIRE || '7d' }
-        );
+      // Set cookie for page loads
+      res.cookie('token', token, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: 'lax',
+        path: '/'
+      });
 
-        // Set cookie for page loads
-        res.cookie('token', token, {
-          httpOnly: false,
-          secure: false,
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-          sameSite: 'lax',
-          path: '/'
-        });
-
-        res.json({
-          success: true,
-          token,
-          user: { id: user.id, name: user.name, email: user.email, role: user.role || 'user' }
-        });
+      res.json({
+        success: true,
+        token,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role || 'user' }
       });
     } catch (error) {
       console.error(error);
@@ -132,20 +118,20 @@ module.exports = (db) => {
   });
 
   // --- GET CURRENT USER ---
-  router.get('/me', verifyToken, (req, res) => {
-    db.get("SELECT id, name, email, role, created_at FROM users WHERE id = ?", 
-      [req.user.id], 
-      (err, user) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        if (!user) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-        res.json({ user });
+  router.get('/me', verifyToken, async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
       }
-    );
+      res.json({ user: result.rows[0] });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   // --- LOGOUT ---
@@ -155,48 +141,40 @@ module.exports = (db) => {
   });
 
   // ============================================================
-  // 👑 ADMIN ONLY ROUTES
+  // ADMIN ONLY ROUTES
   // ============================================================
 
-  router.get('/admin/users', verifyToken, verifyAdmin, (req, res) => {
-    db.all(
-      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
-      (err, users) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        res.json({ 
-          success: true,
-          count: users.length,
-          users 
-        });
-      }
-    );
+  router.get('/admin/users', verifyToken, verifyAdmin, async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC'
+      );
+      res.json({ success: true, count: result.rows.length, users: result.rows });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
-  router.get('/admin/users/:id', verifyToken, verifyAdmin, (req, res) => {
-    const userId = req.params.id;
-    
-    db.get(
-      "SELECT id, name, email, role, created_at FROM users WHERE id = ?",
-      [userId],
-      (err, user) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        if (!user) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-        res.json({ user });
+  router.get('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
+        [req.params.id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
       }
-    );
+      res.json({ user: result.rows[0] });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   router.put('/admin/users/:id/role', verifyToken, verifyAdmin, [
     body('role').isIn(['user', 'admin']).withMessage('Role must be "user" or "admin"')
-  ], (req, res) => {
+  ], async (req, res) => {
     const userId = req.params.id;
     const { role } = req.body;
 
@@ -204,45 +182,38 @@ module.exports = (db) => {
       return res.status(400).json({ error: 'You cannot change your own role' });
     }
 
-    db.run(
-      "UPDATE users SET role = ? WHERE id = ?",
-      [role, userId],
-      function(err) {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Failed to update user role' });
-        }
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-        res.json({ 
-          success: true, 
-          message: `User role updated to ${role}` 
-        });
+    try {
+      const result = await pool.query(
+        'UPDATE users SET role = $1 WHERE id = $2 RETURNING id',
+        [role, userId]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
       }
-    );
+      res.json({ success: true, message: `User role updated to ${role}` });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
-  router.delete('/admin/users/:id', verifyToken, verifyAdmin, (req, res) => {
+  router.delete('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
     const userId = req.params.id;
 
     if (parseInt(userId) === req.user.id) {
       return res.status(400).json({ error: 'You cannot delete your own account' });
     }
 
-    db.run("DELETE FROM users WHERE id = ?", [userId], function(err) {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: 'Failed to delete user' });
-      }
-      if (this.changes === 0) {
+    try {
+      const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+      if (result.rows.length === 0) {
         return res.status(404).json({ error: 'User not found' });
       }
-      res.json({ 
-        success: true, 
-        message: 'User deleted successfully' 
-      });
-    });
+      res.json({ success: true, message: 'User deleted successfully' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Database error' });
+    }
   });
 
   router.post('/admin/create', verifyToken, verifyAdmin, [
@@ -258,36 +229,24 @@ module.exports = (db) => {
     const { name, email, password } = req.body;
 
     try {
-      db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        
-        if (user) {
-          return res.status(400).json({ error: 'Email already registered' });
-        }
+      const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+      if (existing.rows.length > 0) {
+        return res.status(400).json({ error: 'Email already registered' });
+      }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
 
-        db.run(
-          `INSERT INTO users (name, email, password, role, created_at) 
-           VALUES (?, ?, ?, 'admin', datetime('now'))`,
-          [name, email, hashedPassword],
-          function(err) {
-            if (err) {
-              console.error(err);
-              return res.status(500).json({ error: 'Failed to create admin' });
-            }
+      const result = await pool.query(
+        `INSERT INTO users (name, email, password, role, created_at) 
+         VALUES ($1, $2, $3, 'admin', NOW()) RETURNING id, name, email, role`,
+        [name, email, hashedPassword]
+      );
 
-            res.status(201).json({
-              success: true,
-              message: 'Admin account created successfully',
-              user: { id: this.lastID, name, email, role: 'admin' }
-            });
-          }
-        );
+      res.status(201).json({
+        success: true,
+        message: 'Admin account created successfully',
+        user: result.rows[0]
       });
     } catch (error) {
       console.error(error);

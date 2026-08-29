@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= category.name %> | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <style>
+        .category-hero {
+            padding: 60px 0;
+            text-align: center;
+            background: linear-gradient(135deg, #0D0D0D 0%, #1A1A1A 100%);
+            border-bottom: 1px solid #2D2D2D;
+            margin-bottom: 30px;
+        }
+        .category-hero h1 {
+            font-size: 3rem;
+            color: #FFFFFF;
+        }
+        .category-hero h1 .gold {
+            color: #D4AF37;
+        }
+        .category-hero p {
+            color: #AAAAAA;
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 10px auto 0;
+        }
+        .category-hero .category-icon {
+            font-size: 3rem;
+            color: #D4AF37;
+            margin-bottom: 15px;
+        }
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+        .product-card {
+            background: linear-gradient(145deg, #1A1A1A, #0D0D0D);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #2D2D2D;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .product-card:hover {
+            transform: translateY(-8px);
+            border-color: #D4AF37;
+            box-shadow: 0 12px 40px rgba(212, 175, 55, 0.15);
+        }
+        .product-card .featured-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #D4AF37;
+            color: #1A1A1A;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            z-index: 10;
+        }
+        .product-card img {
+            width: 100%;
+            height: 220px;
+            object-fit: cover;
+        }
+        .product-card .info {
+            padding: 20px;
+            text-align: center;
+        }
+        .product-card .info h3 {
+            color: #FFFFFF;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+        .product-card .info .price {
+            color: #D4AF37;
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin: 10px 0 15px;
+        }
+        .product-card .info .btn {
+            width: 100%;
+        }
+        .product-card .info .stock {
+            color: #888;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+        .product-card .info .description {
+            color: #888;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+            font-size: 1.2rem;
+        }
+        .nav-categories {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 15px 0;
+            background: #0D0D0D;
+            border-bottom: 1px solid #2D2D2D;
+        }
+        .nav-categories a {
+            color: #888;
+            text-decoration: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: 1px solid #2D2D2D;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        .nav-categories a:hover,
+        .nav-categories a.active {
+            color: #D4AF37;
+            border-color: #D4AF37;
+            background: rgba(212, 175, 55, 0.1);
+        }
+        .nav-categories a i {
+            margin-right: 8px;
+        }
+        @media (max-width: 768px) {
+            .category-hero h1 {
+                font-size: 2rem;
+            }
+            .product-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 15px;
+            }
+            .nav-categories {
+                gap: 8px;
+                padding: 10px;
+            }
+            .nav-categories a {
+                padding: 6px 12px;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <!-- Category Navigation -->
+    <nav class="nav-categories">
+        <%
+            const navCategories = [
+                { slug: 'perfumes', name: 'Perfumes', icon: 'fa-perfume' },
+                { slug: 'fans', name: 'Fans', icon: 'fa-fan' },
+                { slug: 'ties', name: 'Ties', icon: 'fa-tie' },
+                { slug: 'suits', name: 'Suits', icon: 'fa-user-tie' },
+                { slug: 'tools', name: 'Tools', icon: 'fa-tools' }
+            ];
+            navCategories.forEach(cat => {
+                const isActive = cat.slug === category.slug;
+        %>
+            <a href="/category/<%= cat.slug %>" class="<%= isActive ? 'active' : '' %>">
+                <i class="fas <%= cat.icon %>"></i> <%= cat.name %>
+            </a>
+        <% }); %>
+    </nav>
+    
+    <main>
+        <div class="category-hero">
+            <div class="container">
+                <div class="category-icon">
+                    <i class="fas <%= category.icon || 'fa-tag' %>"></i>
+                </div>
+                <h1><span class="gold"><%= category.name %></span></h1>
+                <p><%= category.description || 'Explore our collection' %></p>
+            </div>
+        </div>
+
+        <div class="container">
+            <% if (products && products.length > 0) { %>
+                <div class="product-grid">
+                    <% products.forEach(product => { %>
+                        <div class="product-card">
+                            <% if (product.featured) { %>
+                                <span class="featured-badge">⭐ Featured</span>
+                            <% } %>
+                            <img src="/images/<%= product.image_url || 'placeholder.jpg' %>" 
+                                 alt="<%= product.name %>" 
+                                 onerror="this.src='/images/placeholder.jpg'">
+                            <div class="info">
+                                <h3><%= product.name %></h3>
+                                <p class="description"><%= product.description %></p>
+                                <p class="price">R <%= parseFloat(product.price).toFixed(2) %></p>
+                                <p class="stock">📦 <%= product.stock %> in stock</p>
+                                <button class="btn btn-primary btn-sm add-to-cart-btn" 
+                                        onclick="addToCart(<%= product.id %>)">
+                                    <i class="fas fa-cart-plus"></i> Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <div class="empty-state">
+                    <i class="fas fa-box-open" style="font-size: 3rem; display: block; margin-bottom: 15px; color: #555;"></i>
+                    No products available in this category yet.
+                </div>
+            <% } %>
+        </div>
+    </main>
+
+    <script>
+        async function addToCart(productId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in first!');
+                document.getElementById('loginBtn')?.click();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/cart/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ product_id: productId, quantity: 1 })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Item added to cart!');
+                    const badge = document.getElementById('cartBadge');
+                    if (badge) {
+                        const current = parseInt(badge.textContent) || 0;
+                        badge.textContent = current + 1;
+                    }
+                } else {
+                    alert(data.error || 'Failed to add to cart');
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+    </script>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
+</body>
+</html>
