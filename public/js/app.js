@@ -1,5 +1,5 @@
 // ============================================================
-// MAIN APPLICATION - Product Loading & Cart Functions
+// EXPLORE ESSENCE - MAIN APPLICATION
 // ============================================================
 
 const API_BASE = window.location.origin + '/api';
@@ -8,11 +8,14 @@ const API_BASE = window.location.origin + '/api';
 // ADD TO CART FUNCTION
 // ============================================================
 
-async function addToCart(productId, quantity = 1) {
-    const token = window.ExploreEssence?.getToken?.();
+async function addToCart(productId) {
+    console.log('🛒 Adding product to cart:', productId);
+    
+    const token = localStorage.getItem('token');
+    console.log('Token exists?', !!token);
     
     if (!token) {
-        window.ExploreEssence?.showNotification?.('Please log in to add items to cart.', 'error');
+        alert('Please log in first!');
         document.getElementById('loginBtn')?.click();
         return;
     }
@@ -20,60 +23,137 @@ async function addToCart(productId, quantity = 1) {
     try {
         const response = await fetch(`${API_BASE}/cart/add`, {
             method: 'POST',
-            headers: window.ExploreEssence?.getAuthHeaders?.() || {},
-            body: JSON.stringify({ product_id: productId, quantity: quantity })
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ product_id: parseInt(productId), quantity: 1 })
+        });
+
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (response.ok) {
+            showNotification('✅ Item added to cart!', 'success');
+            // Update cart badge
+            loadCartCount();
+        } else {
+            showNotification(data.error || 'Failed to add to cart', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        showNotification('An error occurred. Please try again.', 'error');
+    }
+}
+
+// ============================================================
+// LOAD CART COUNT
+// ============================================================
+
+async function loadCartCount() {
+    const token = localStorage.getItem('token');
+    const badge = document.getElementById('cartBadge');
+    
+    if (!token) {
+        if (badge) badge.textContent = '0';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/cart`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (badge) badge.textContent = data.item_count || 0;
+        } else {
+            if (badge) badge.textContent = '0';
+        }
+    } catch (error) {
+        console.error('Error loading cart count:', error);
+        if (badge) badge.textContent = '0';
+    }
+}
+
+// ============================================================
+// NOTIFICATION FUNCTION
+// ============================================================
+
+function showNotification(message, type = 'info') {
+    const colors = {
+        success: '#D4AF37',
+        error: '#FF4444',
+        info: '#3498db'
+    };
+    
+    // Remove existing notifications
+    const existing = document.querySelector('.notification');
+    if (existing) existing.remove();
+    
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 16px 24px;
+        background: #1A1A1A;
+        color: #FFFFFF;
+        border-left: 4px solid ${colors[type] || '#888'};
+        border-radius: 8px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        z-index: 9999;
+        max-width: 400px;
+        animation: slideIn 0.3s ease;
+        font-size: 0.95rem;
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// ============================================================
+// ADD TO WISHLIST
+// ============================================================
+
+async function addToWishlist(productId) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert('Please log in first!');
+        document.getElementById('loginBtn')?.click();
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/wishlist/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ product_id: parseInt(productId) })
         });
 
         const data = await response.json();
         
         if (response.ok) {
-            window.ExploreEssence?.loadCartCount?.();
-            window.ExploreEssence?.showNotification?.('✅ Item added to cart!', 'success');
+            showNotification('❤️ Added to wishlist!', 'success');
         } else {
-            window.ExploreEssence?.showNotification?.(data.error || 'Failed to add to cart', 'error');
+            showNotification(data.error || 'Failed to add to wishlist', 'error');
         }
     } catch (error) {
-        console.error('Error adding to cart:', error);
-        window.ExploreEssence?.showNotification?.('An error occurred. Please try again.', 'error');
-    }
-}
-
-// ============================================================
-// LOAD PRODUCTS
-// ============================================================
-
-async function loadProducts() {
-    const grid = document.getElementById('productGrid');
-    if (!grid) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/products`);
-        const products = await response.json();
-        
-        if (products.length === 0) {
-            grid.innerHTML = '<p style="text-align:center;color:#888;">No products available.</p>';
-            return;
-        }
-        
-        grid.innerHTML = products.map(product => `
-            <div class="product-card">
-                <img src="/images/${product.image_url || 'placeholder.jpg'}" 
-                     alt="${product.name}" 
-                     onerror="this.src='/images/placeholder.jpg'">
-                <div class="info">
-                    <h3>${product.name}</h3>
-                    <p class="price">R ${product.price.toFixed(2)}</p>
-                    <button class="btn btn-primary btn-sm add-to-cart-btn" 
-                            data-id="${product.id}"
-                            onclick="addToCart(${product.id})">
-                        <i class="fas fa-cart-plus"></i> Add to Cart
-                    </button>
-                </div>
-            </div>
-        `).join('');
-    } catch (error) {
-        console.error('Error loading products:', error);
-        grid.innerHTML = '<p style="text-align:center;color:#FF4444;">Failed to load products. Please try again.</p>';
+        console.error('Error adding to wishlist:', error);
+        showNotification('An error occurred. Please try again.', 'error');
     }
 }
 
@@ -82,13 +162,14 @@ async function loadProducts() {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadProducts();
-    
-    // Also load products on any page with product grid
-    if (document.getElementById('productGrid')) {
-        loadProducts();
-    }
+    console.log('🚀 Explore Essence loaded');
+    loadCartCount();
 });
 
-// Make addToCart global for onclick handlers
+// Make functions globally available for onclick handlers
 window.addToCart = addToCart;
+window.addToWishlist = addToWishlist;
+window.loadCartCount = loadCartCount;
+window.showNotification = showNotification;
+
+console.log('✅ App.js loaded successfully');

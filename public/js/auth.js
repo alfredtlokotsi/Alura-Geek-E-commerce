@@ -1,5 +1,5 @@
 // ============================================================
-// AUTHENTICATION FUNCTIONS
+// EXPLORE ESSENCE - AUTHENTICATION
 // ============================================================
 
 const API_BASE = window.location.origin + '/api';
@@ -120,6 +120,15 @@ function updateUI(user) {
             userMenu.classList.add('active');
         }
         if (userName) userName.textContent = user.name || 'User';
+        
+        // Update dropdown user info
+        const dropdownName = document.getElementById('dropdownUserName');
+        const dropdownEmail = document.getElementById('dropdownUserEmail');
+        const dropdownRole = document.querySelector('.dropdown-user-role');
+        
+        if (dropdownName) dropdownName.textContent = user.name || 'User';
+        if (dropdownEmail) dropdownEmail.textContent = user.email || '';
+        if (dropdownRole) dropdownRole.textContent = user.role || 'User';
     } else {
         if (authButtons) authButtons.style.display = 'flex';
         if (userMenu) {
@@ -137,13 +146,14 @@ function updateUI(user) {
 async function handleLogin(email, password) {
     try {
         const result = await loginUser(email, password);
+        console.log('Login result:', result);
         
         if (result.success && result.token) {
             setToken(result.token);
             setUser(result.user);
             updateUI(result.user);
             closeAllModals();
-            loadCartCount();
+            if (typeof loadCartCount === 'function') loadCartCount();
             showNotification('Logged in successfully!', 'success');
             setTimeout(() => window.location.reload(), 500);
             return true;
@@ -163,13 +173,14 @@ async function handleLogin(email, password) {
 async function handleSignup(name, email, password) {
     try {
         const result = await signupUser(name, email, password);
+        console.log('Signup result:', result);
         
         if (result.success && result.token) {
             setToken(result.token);
             setUser(result.user);
             updateUI(result.user);
             closeAllModals();
-            loadCartCount();
+            if (typeof loadCartCount === 'function') loadCartCount();
             showNotification('Account created successfully!', 'success');
             setTimeout(() => window.location.reload(), 500);
             return true;
@@ -197,7 +208,7 @@ function handleLogout() {
     removeToken();
     removeUser();
     updateUI(null);
-    loadCartCount();
+    if (typeof loadCartCount === 'function') loadCartCount();
     closeAllModals();
     if (dropdownMenu) dropdownMenu.classList.remove('active');
     showNotification('Logged out successfully', 'info');
@@ -226,35 +237,7 @@ function closeAllModals() {
 }
 
 // ============================================================
-// CART COUNT
-// ============================================================
-
-async function loadCartCount() {
-    const token = getToken();
-    if (!token) {
-        if (cartBadge) cartBadge.textContent = '0';
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/cart`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (cartBadge) cartBadge.textContent = data.item_count || 0;
-        } else {
-            if (cartBadge) cartBadge.textContent = '0';
-        }
-    } catch (error) {
-        console.error('Error loading cart count:', error);
-        if (cartBadge) cartBadge.textContent = '0';
-    }
-}
-
-// ============================================================
-// NOTIFICATIONS
+// NOTIFICATION
 // ============================================================
 
 function showNotification(message, type = 'info') {
@@ -264,7 +247,11 @@ function showNotification(message, type = 'info') {
         info: '#3498db'
     };
     
+    const existing = document.querySelector('.notification');
+    if (existing) existing.remove();
+    
     const notification = document.createElement('div');
+    notification.className = 'notification';
     notification.style.cssText = `
         position: fixed;
         bottom: 20px;
@@ -316,7 +303,12 @@ if (signupForm) {
     });
 }
 
-if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleLogout();
+    });
+}
 
 if (switchToSignup) {
     switchToSignup.addEventListener('click', (e) => {
@@ -382,19 +374,20 @@ async function initAuth() {
             updateUI(null);
         }
     }
-    loadCartCount();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Auth initialized');
     initAuth();
 });
 
+// Expose to global scope
 window.ExploreEssence = {
     getToken,
     getUser,
     getAuthHeaders,
-    loadCartCount,
-    showNotification,
     logout: handleLogout,
     login: handleLogin
 };
+
+console.log('✅ Auth.js loaded successfully');
