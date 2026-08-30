@@ -11,19 +11,19 @@
             <i class="fas fa-bars"></i>
         </button>
         
-        <nav class="nav" id="mainNav">
-            <a href="/">Home</a>
-            <a href="/products">Shop</a>
-            <a href="/category/perfumes">Perfumes</a>
-            <a href="/category/fans">Fans</a>
-            <a href="/category/ties">Ties</a>
-            <a href="/category/suits">Suits</a>
-            <a href="/category/tools">Tools</a>
-            <a href="/about">About</a>
-            <% if (user && user.role === 'admin') { %>
-                <a href="/admin" class="admin-link">👑 Admin</a>
-            <% } %>
-        </nav>
+<nav class="nav" id="mainNav">
+    <a href="/">Home</a>
+    <a href="/products">Shop</a>
+    <a href="/category/perfumes">Perfumes</a>
+    <a href="/category/fans">Fans</a>
+    <a href="/category/ties">Ties</a>
+    <a href="/suits">Suits</a>
+    <a href="/category/tools">Tools</a>
+    <a href="/about">About</a>
+    <% if (user && user.role === 'admin') { %>
+        <a href="/admin" class="admin-link">👑 Admin</a>
+    <% } %>
+</nav>
         
         <div class="header-right">
             <!-- Search -->

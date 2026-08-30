@@ -928,7 +928,80 @@ app.put('/api/orders/:orderId/status', verifyToken, verifyAdmin, async (req, res
         res.status(500).json({ error: 'Failed to update order' });
     }
 });
+// ============================================================
+// SUITS ROUTES
+// ============================================================
 
+// Get all suits (API)
+app.get('/api/suits', async (req, res) => {
+    try {
+        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get single suit (API)
+app.get('/api/suits/:id', async (req, res) => {
+    try {
+        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Suit not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get featured suits (API)
+app.get('/api/suits/featured', async (req, res) => {
+    try {
+        const result = await query('SELECT * FROM suits WHERE featured = 1 ORDER BY created_at DESC LIMIT 6');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Suits Page (Web) ---
+app.get('/suits', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
+        res.render('pages/suits', {
+            title: 'Suits Collection',
+            user: user,
+            suits: result.rows
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database error');
+    }
+});
+
+// --- Suit Detail Page (Web) ---
+app.get('/suits/:id', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).send('Suit not found');
+        }
+        res.render('pages/suit-detail', {
+            title: result.rows[0].product_name,
+            user: user,
+            suit: result.rows[0]
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database error');
+    }
+});
 // ============================================================
 // HEALTH CHECK
 // ============================================================
