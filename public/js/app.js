@@ -36,13 +36,89 @@ async function addToCart(productId) {
         
         if (response.ok) {
             showNotification('✅ Item added to cart!', 'success');
-            // Update cart badge
             loadCartCount();
         } else {
             showNotification(data.error || 'Failed to add to cart', 'error');
         }
     } catch (error) {
         console.error('Error adding to cart:', error);
+        showNotification('An error occurred. Please try again.', 'error');
+    }
+}
+
+// ============================================================
+// ADD SUIT TO CART
+// ============================================================
+
+async function addSuitToCart(suitId) {
+    console.log('🛒 Adding suit to cart:', suitId);
+    
+    const token = localStorage.getItem('token');
+    console.log('Token exists?', !!token);
+    
+    if (!token) {
+        alert('Please log in first!');
+        document.getElementById('loginBtn')?.click();
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/cart/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ product_id: parseInt(suitId), quantity: 1 })
+        });
+
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (response.ok) {
+            showNotification('✅ Suit added to cart!', 'success');
+            loadCartCount();
+        } else {
+            showNotification(data.error || 'Failed to add to cart', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        showNotification('An error occurred. Please try again.', 'error');
+    }
+}
+
+// ============================================================
+// ADD TO WISHLIST
+// ============================================================
+
+async function addToWishlist(productId) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert('Please log in first!');
+        document.getElementById('loginBtn')?.click();
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/wishlist/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ product_id: parseInt(productId) })
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification('❤️ Added to wishlist!', 'success');
+        } else {
+            showNotification(data.error || 'Failed to add to wishlist', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding to wishlist:', error);
         showNotification('An error occurred. Please try again.', 'error');
     }
 }
@@ -123,51 +199,11 @@ function showNotification(message, type = 'info') {
 }
 
 // ============================================================
-// ADD TO WISHLIST
+// MAKE FUNCTIONS GLOBAL
 // ============================================================
 
-async function addToWishlist(productId) {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        alert('Please log in first!');
-        document.getElementById('loginBtn')?.click();
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/wishlist/add`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ product_id: parseInt(productId) })
-        });
-
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification('❤️ Added to wishlist!', 'success');
-        } else {
-            showNotification(data.error || 'Failed to add to wishlist', 'error');
-        }
-    } catch (error) {
-        console.error('Error adding to wishlist:', error);
-        showNotification('An error occurred. Please try again.', 'error');
-    }
-}
-
-// ============================================================
-// INITIALIZATION
-// ============================================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Explore Essence loaded');
-    loadCartCount();
-});
-
-// Make functions globally available for onclick handlers
 window.addToCart = addToCart;
+window.addSuitToCart = addSuitToCart;
 window.addToWishlist = addToWishlist;
 window.loadCartCount = loadCartCount;
 window.showNotification = showNotification;

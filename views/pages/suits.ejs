@@ -36,7 +36,7 @@
         }
         .suit-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 30px;
             margin: 40px 0;
         }
@@ -73,15 +73,39 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
+            position: relative;
         }
         .suit-card .image-container img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
             transition: transform 0.5s ease;
+            padding: 10px;
+            background: #0D0D0D;
         }
         .suit-card:hover .image-container img {
-            transform: scale(1.05);
+            transform: scale(1.02);
+        }
+        .suit-card .image-container .zoom-icon {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(212, 175, 55, 0.9);
+            color: #1A1A1A;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .suit-card .image-container:hover .zoom-icon {
+            opacity: 1;
         }
         .suit-card .info {
             padding: 20px;
@@ -89,28 +113,28 @@
         }
         .suit-card .info h3 {
             color: #FFFFFF;
-            font-size: 1.1rem;
+            font-size: 1rem;
             margin-bottom: 8px;
             line-height: 1.4;
         }
         .suit-card .info .suit-details {
             color: #888;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             margin-bottom: 4px;
         }
         .suit-card .info .suit-details i {
             color: #D4AF37;
-            width: 18px;
+            width: 16px;
         }
         .suit-card .info .price {
             color: #D4AF37;
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: 700;
             margin: 10px 0 8px;
         }
         .suit-card .info .stock {
             color: #888;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             margin-bottom: 12px;
         }
         .suit-card .info .stock .in-stock {
@@ -124,16 +148,12 @@
         }
         .suit-card .info .accessories {
             color: #666;
-            font-size: 0.8rem;
-            margin: 10px 0;
+            font-size: 0.75rem;
+            margin: 8px 0;
             padding: 8px 10px;
             background: #0D0D0D;
             border-radius: 6px;
             border-left: 2px solid #D4AF37;
-        }
-        .suit-card .info .accessories i {
-            color: #D4AF37;
-            margin-right: 5px;
         }
         .suit-card .info .pieces-badge {
             display: inline-block;
@@ -141,7 +161,7 @@
             color: #1A1A1A;
             padding: 2px 10px;
             border-radius: 12px;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 600;
             margin-bottom: 8px;
         }
@@ -178,59 +198,80 @@
         .nav-categories a i {
             margin-right: 8px;
         }
-        .filter-bar {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #1A1A1A;
-            border-radius: 8px;
-            border: 1px solid #2D2D2D;
+
+        /* ============================================================
+           LIGHTBOX / MODAL FOR FULL IMAGE
+           ============================================================ */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            justify-content: center;
             align-items: center;
-        }
-        .filter-bar select {
-            padding: 8px 12px;
-            background: #0D0D0D;
-            border: 1px solid #2D2D2D;
-            border-radius: 6px;
-            color: #FFFFFF;
             cursor: pointer;
+            padding: 40px;
         }
-        .filter-bar select:focus {
-            outline: none;
-            border-color: #D4AF37;
+        .lightbox.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
         }
-        .filter-bar .filter-label {
-            color: #888;
-            font-size: 0.85rem;
+        .lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 2px solid #D4AF37;
+            box-shadow: 0 0 60px rgba(212, 175, 55, 0.2);
         }
-        .view-details-btn {
-            display: inline-block;
-            padding: 6px 14px;
-            background: transparent;
+        .lightbox .close-lightbox {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            color: #FFFFFF;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            z-index: 10000;
+            background: none;
+            border: none;
+        }
+        .lightbox .close-lightbox:hover {
             color: #D4AF37;
-            border: 1px solid #D4AF37;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            margin-top: 8px;
         }
-        .view-details-btn:hover {
-            background: #D4AF37;
-            color: #1A1A1A;
+        .lightbox .lightbox-caption {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #FFFFFF;
+            font-size: 1.1rem;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 24px;
+            border-radius: 8px;
+            max-width: 80%;
+            border: 1px solid rgba(212, 175, 55, 0.3);
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
         @media (max-width: 768px) {
             .category-hero h1 {
                 font-size: 2rem;
             }
             .suit-grid {
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
                 gap: 15px;
             }
             .suit-card .image-container {
-                height: 240px;
+                height: 250px;
             }
             .nav-categories {
                 gap: 8px;
@@ -240,14 +281,33 @@
                 padding: 6px 12px;
                 font-size: 0.8rem;
             }
-            .filter-bar {
-                flex-direction: column;
-                align-items: stretch;
+            .lightbox .close-lightbox {
+                top: 20px;
+                right: 20px;
+                font-size: 2rem;
+            }
+            .lightbox .lightbox-caption {
+                font-size: 0.9rem;
+                padding: 8px 16px;
+                bottom: 20px;
             }
         }
         @media (max-width: 480px) {
             .suit-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            .suit-card .image-container {
+                height: 200px;
+            }
+            .suit-card .info {
+                padding: 12px;
+            }
+            .suit-card .info h3 {
+                font-size: 0.85rem;
+            }
+            .suit-card .info .price {
+                font-size: 1rem;
             }
         }
     </style>
@@ -289,45 +349,23 @@
         </div>
 
         <div class="container">
-            <!-- Filter Bar -->
-            <div class="filter-bar">
-                <span class="filter-label"><i class="fas fa-filter"></i> Filter:</span>
-                <select id="fitFilter" onchange="filterSuits()">
-                    <option value="all">All Fits</option>
-                    <option value="Slim Fit">Slim Fit</option>
-                    <option value="Tailored Fit">Tailored Fit</option>
-                    <option value="Classic Fit">Classic Fit</option>
-                    <option value="Modern Fit">Modern Fit</option>
-                    <option value="Relaxed Fit">Relaxed Fit</option>
-                </select>
-                <select id="piecesFilter" onchange="filterSuits()">
-                    <option value="all">All Pieces</option>
-                    <option value="2">2-Piece</option>
-                    <option value="3">3-Piece</option>
-                </select>
-                <select id="featuredFilter" onchange="filterSuits()">
-                    <option value="all">All Suits</option>
-                    <option value="1">Featured Only</option>
-                </select>
-                <span style="color: #888; font-size: 0.85rem; margin-left: auto;" id="suitCount">
-                    <%= suits.length %> suits available
-                </span>
-            </div>
-
             <% if (suits && suits.length > 0) { %>
-                <div class="suit-grid" id="suitGrid">
+                <div style="text-align: right; color: #888; font-size: 0.9rem; margin-bottom: 10px;">
+                    <%= suits.length %> suits available
+                </div>
+                <div class="suit-grid">
                     <% suits.forEach(suit => { %>
-                        <div class="suit-card" 
-                             data-fit="<%= suit.fit_type %>"
-                             data-pieces="<%= suit.pieces_count %>"
-                             data-featured="<%= suit.featured %>">
+                        <div class="suit-card">
                             <% if (suit.featured) { %>
                                 <span class="featured-badge">⭐ Featured</span>
                             <% } %>
-                            <div class="image-container">
+                            <div class="image-container" onclick="openLightbox('/images/<%= suit.image_url %>', '<%= suit.product_name %>')">
                                 <img src="/images/<%= suit.image_url || 'placeholder.jpg' %>" 
                                      alt="<%= suit.product_name %>" 
                                      onerror="this.src='/images/placeholder.jpg'">
+                                <div class="zoom-icon">
+                                    <i class="fas fa-expand"></i>
+                                </div>
                             </div>
                             <div class="info">
                                 <span class="pieces-badge"><%= suit.pieces_count %>-Piece</span>
@@ -340,7 +378,7 @@
                                 <% } %>
                                 <% if (suit.accessories_included) { %>
                                     <div class="accessories">
-                                        <i class="fas fa-gift"></i> <%= suit.accessories_included.substring(0, 80) %><%= suit.accessories_included.length > 80 ? '...' : '' %>
+                                        <i class="fas fa-gift"></i> <%= suit.accessories_included.substring(0, 60) %><%= suit.accessories_included.length > 60 ? '...' : '' %>
                                     </div>
                                 <% } %>
                                 <p class="price">R <%= parseFloat(suit.price).toFixed(2) %></p>
@@ -351,14 +389,9 @@
                                         ❌ <span class="out-of-stock">Out of Stock</span>
                                     <% } %>
                                 </p>
-                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                    <button class="btn btn-primary btn-sm" onclick="addSuitToCart(<%= suit.id %>)" style="flex: 1;">
-                                        <i class="fas fa-cart-plus"></i> Add to Cart
-                                    </button>
-                                    <a href="/suits/<%= suit.id %>" class="view-details-btn">
-                                        <i class="fas fa-eye"></i> View
-                                    </a>
-                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="addSuitToCart(<%= suit.id %>)">
+                                    <i class="fas fa-cart-plus"></i> Add to Cart
+                                </button>
                             </div>
                         </div>
                     <% }) %>
@@ -372,7 +405,46 @@
         </div>
     </main>
 
+    <!-- ============================================================
+    LIGHTBOX / MODAL FOR FULL IMAGE
+    ============================================================ -->
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+        <button class="close-lightbox" onclick="closeLightbox()">&times;</button>
+        <img id="lightboxImage" src="" alt="Suit Image" />
+        <div class="lightbox-caption" id="lightboxCaption"></div>
+    </div>
+
     <script>
+        // ============================================================
+        // LIGHTBOX FUNCTIONS
+        // ============================================================
+        function openLightbox(imageUrl, caption) {
+            const lightbox = document.getElementById('lightbox');
+            const img = document.getElementById('lightboxImage');
+            const captionEl = document.getElementById('lightboxCaption');
+            
+            img.src = imageUrl;
+            captionEl.textContent = caption;
+            lightbox.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            lightbox.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Close lightbox with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeLightbox();
+            }
+        });
+
+        // ============================================================
+        // ADD TO CART
+        // ============================================================
         async function addSuitToCart(suitId) {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -409,32 +481,9 @@
             }
         }
 
-        function filterSuits() {
-            const fitFilter = document.getElementById('fitFilter').value;
-            const piecesFilter = document.getElementById('piecesFilter').value;
-            const featuredFilter = document.getElementById('featuredFilter').value;
-            
-            const cards = document.querySelectorAll('.suit-card');
-            let visibleCount = 0;
-            
-            cards.forEach(card => {
-                const fit = card.dataset.fit;
-                const pieces = card.dataset.pieces;
-                const featured = card.dataset.featured;
-                
-                let show = true;
-                
-                if (fitFilter !== 'all' && fit !== fitFilter) show = false;
-                if (piecesFilter !== 'all' && pieces !== piecesFilter) show = false;
-                if (featuredFilter !== 'all' && featured !== featuredFilter) show = false;
-                
-                card.style.display = show ? 'block' : 'none';
-                if (show) visibleCount++;
-            });
-            
-            document.getElementById('suitCount').textContent = visibleCount + ' suits available';
-        }
-
+        // ============================================================
+        // NOTIFICATION
+        // ============================================================
         function showNotification(message, type = 'info') {
             const colors = {
                 success: '#D4AF37',

@@ -24,8 +24,8 @@ app.use(helmet());
 
 // --- Rate Limiting ---
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', limiter);
@@ -58,7 +58,7 @@ if (process.env.DATABASE_URL) {
         connectionTimeoutMillis: 10000,
         idleTimeoutMillis: 30000,
     });
-    console.log('✅ Using PostgreSQL database on Render');
+    console.log('✅ Using PostgreSQL database');
 } else {
     console.log('⚠️ No DATABASE_URL found, using SQLite for local development');
     const sqlite3 = require('sqlite3').verbose();
@@ -225,13 +225,21 @@ async function initDatabase() {
             )
         `);
 
-        // Password Reset Tokens
+        // Suits
         await query(`
-            CREATE TABLE IF NOT EXISTS password_resets (
+            CREATE TABLE IF NOT EXISTS suits (
                 id SERIAL PRIMARY KEY,
-                email TEXT NOT NULL,
-                token TEXT NOT NULL UNIQUE,
-                expires_at TIMESTAMP NOT NULL,
+                product_name TEXT NOT NULL,
+                color TEXT,
+                fit_type TEXT,
+                pieces_count INTEGER DEFAULT 3,
+                jacket_style TEXT,
+                waistcoat_style TEXT,
+                accessories_included TEXT,
+                price DECIMAL(10,2) NOT NULL,
+                stock_quantity INTEGER DEFAULT 10,
+                image_url TEXT,
+                featured INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -447,7 +455,6 @@ app.get('/product/:id', async (req, res) => {
         const user = getUserFromCookie(req);
         const productId = req.params.id;
         
-        // Get product with rating
         const productResult = await query(`
             SELECT p.*, 
                 COALESCE(AVG(r.rating), 0) as avg_rating,
@@ -463,7 +470,6 @@ app.get('/product/:id', async (req, res) => {
         }
         const product = productResult.rows[0];
         
-        // Get related products (same category)
         const relatedResult = await query(
             `SELECT * FROM products 
              WHERE category_id = $1 AND id != $2 
@@ -471,7 +477,6 @@ app.get('/product/:id', async (req, res) => {
             [product.category_id, productId]
         );
         
-        // Get reviews
         const reviewsResult = await query(`
             SELECT r.*, u.name as user_name 
             FROM reviews r
@@ -490,6 +495,41 @@ app.get('/product/:id', async (req, res) => {
         });
     } catch (err) {
         console.error(err);
+        res.status(500).send('Database error');
+    }
+});
+
+// --- Suits Page ---
+app.get('/suits', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
+        res.render('pages/suits', {
+            title: 'Suits Collection',
+            user: user,
+            suits: result.rows
+        });
+    } catch (err) {
+        console.error('❌ Suits page error:', err);
+        res.status(500).send('Database error: ' + err.message);
+    }
+});
+
+// --- Suit Detail Page ---
+app.get('/suits/:id', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).send('Suit not found');
+        }
+        res.render('pages/suit-detail', {
+            title: result.rows[0].product_name,
+            user: user,
+            suit: result.rows[0]
+        });
+    } catch (err) {
+        console.error('❌ Suit detail error:', err);
         res.status(500).send('Database error');
     }
 });
@@ -521,7 +561,7 @@ app.get('/cart', verifyToken, async (req, res) => {
             subtotal += parseFloat(item.price) * item.quantity;
         });
         
-        const tax = subtotal * 0.15; // 15% VAT
+        const tax = subtotal * 0.15;
         const shipping = subtotal > 500 ? 0 : 50;
         const total = subtotal + tax + shipping;
         
@@ -579,6 +619,61 @@ app.get('/checkout', verifyToken, async (req, res) => {
             tax: tax.toFixed(2),
             shipping: shipping.toFixed(2),
             total: total.toFixed(2)
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database error');
+    }
+});
+
+// --- Orders ---
+app.get('/orders', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const result = await query(`
+            SELECT o.*, 
+                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+            FROM orders o
+            WHERE o.user_id = $1
+            ORDER BY o.created_at DESC
+        `, [userId]);
+        
+        res.render('pages/orders', {
+            title: 'My Orders',
+            user: req.user,
+            orders: result.rows || []
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database error');
+    }
+});
+
+// --- Order Details ---
+app.get('/orders/:orderId', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const orderId = req.params.orderId;
+        
+        const orderResult = await query(
+            'SELECT * FROM orders WHERE id = $1 AND user_id = $2',
+            [orderId, userId]
+        );
+        
+        if (orderResult.rows.length === 0) {
+            return res.status(404).send('Order not found');
+        }
+        
+        const itemsResult = await query(
+            'SELECT * FROM order_items WHERE order_id = $1',
+            [orderId]
+        );
+        
+        res.render('pages/order-detail', {
+            title: 'Order Details',
+            user: req.user,
+            order: orderResult.rows[0],
+            items: itemsResult.rows || []
         });
     } catch (err) {
         console.error(err);
@@ -645,61 +740,6 @@ app.get('/profile', verifyToken, async (req, res) => {
     }
 });
 
-// --- My Orders ---
-app.get('/orders', verifyToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const result = await query(`
-            SELECT o.*, 
-                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
-            FROM orders o
-            WHERE o.user_id = $1
-            ORDER BY o.created_at DESC
-        `, [userId]);
-        
-        res.render('pages/orders', {
-            title: 'My Orders',
-            user: req.user,
-            orders: result.rows || []
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
-});
-
-// --- Order Details ---
-app.get('/orders/:orderId', verifyToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const orderId = req.params.orderId;
-        
-        const orderResult = await query(
-            'SELECT * FROM orders WHERE id = $1 AND user_id = $2',
-            [orderId, userId]
-        );
-        
-        if (orderResult.rows.length === 0) {
-            return res.status(404).send('Order not found');
-        }
-        
-        const itemsResult = await query(
-            'SELECT * FROM order_items WHERE order_id = $1',
-            [orderId]
-        );
-        
-        res.render('pages/order-detail', {
-            title: 'Order Details',
-            user: req.user,
-            order: orderResult.rows[0],
-            items: itemsResult.rows || []
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
-});
-
 // --- Admin Dashboard ---
 app.get('/admin', verifyToken, verifyAdmin, async (req, res) => {
     try {
@@ -745,73 +785,225 @@ app.get('/about', (req, res) => {
 });
 
 // ============================================================
-// API ROUTES
+// SUITS API ROUTES
 // ============================================================
 
-// --- Search API ---
-app.get('/api/search', async (req, res) => {
+// Get all suits (API)
+app.get('/api/suits', async (req, res) => {
     try {
-        const { q } = req.query;
-        if (!q) return res.json([]);
-        
-        const result = await query(
-            `SELECT * FROM products 
-             WHERE name ILIKE $1 OR description ILIKE $1 
-             ORDER BY name LIMIT 20`,
-            [`%${q}%`]
-        );
+        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
         res.json(result.rows);
     } catch (err) {
+        console.error('API Suits error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- Wishlist API ---
-app.post('/api/wishlist/add', verifyToken, async (req, res) => {
+// Get single suit (API)
+app.get('/api/suits/:id', async (req, res) => {
     try {
-        const { product_id } = req.body;
-        await query(
-            'INSERT INTO wishlist (user_id, product_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [req.user.id, product_id]
-        );
-        res.json({ success: true, message: 'Added to wishlist' });
+        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Suit not found' });
+        }
+        res.json(result.rows[0]);
     } catch (err) {
+        console.error('API Suit detail error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-app.delete('/api/wishlist/remove/:productId', verifyToken, async (req, res) => {
+// Get featured suits (API)
+app.get('/api/suits/featured', async (req, res) => {
     try {
-        await query(
-            'DELETE FROM wishlist WHERE user_id = $1 AND product_id = $2',
-            [req.user.id, req.params.productId]
-        );
-        res.json({ success: true, message: 'Removed from wishlist' });
+        const result = await query('SELECT * FROM suits WHERE featured = 1 ORDER BY created_at DESC LIMIT 6');
+        res.json(result.rows);
     } catch (err) {
+        console.error('API Featured suits error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- Reviews API ---
-app.post('/api/reviews', verifyToken, async (req, res) => {
+// ============================================================
+// API ROUTES - Cart, Orders, etc.
+// ============================================================
+
+// GET cart
+app.get('/api/cart', verifyToken, async (req, res) => {
     try {
-        const { product_id, rating, comment } = req.body;
+        const userId = req.user.id;
         
-        if (rating < 1 || rating > 5) {
-            return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+        let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
+        let cartId;
+        
+        if (cartResult.rows.length === 0) {
+            const newCart = await query('INSERT INTO cart (user_id) VALUES ($1) RETURNING id', [userId]);
+            cartId = newCart.rows[0].id;
+        } else {
+            cartId = cartResult.rows[0].id;
         }
         
-        await query(
-            'INSERT INTO reviews (product_id, user_id, rating, comment) VALUES ($1, $2, $3, $4)',
-            [product_id, req.user.id, rating, comment]
-        );
-        res.json({ success: true, message: 'Review added' });
+        const itemsResult = await query(`
+            SELECT ci.*, p.name, p.price, p.image_url, p.stock
+            FROM cart_items ci
+            JOIN products p ON ci.product_id = p.id
+            WHERE ci.cart_id = $1
+        `, [cartId]);
+        
+        let total = 0;
+        itemsResult.rows.forEach(item => {
+            total += parseFloat(item.price) * item.quantity;
+        });
+        
+        res.json({
+            cart_id: cartId,
+            items: itemsResult.rows,
+            total: total.toFixed(2),
+            item_count: itemsResult.rows.length
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
     }
 });
 
-// --- Checkout API ---
+// POST - Add item to cart
+app.post('/api/cart/add', verifyToken, async (req, res) => {
+    const userId = req.user.id;
+    const { product_id, quantity = 1 } = req.body;
+    
+    if (!product_id) {
+        return res.status(400).json({ error: 'Product ID is required' });
+    }
+    
+    try {
+        // Check if product exists in either products or suits table
+        let product = null;
+        let productResult = await query('SELECT * FROM products WHERE id = $1', [product_id]);
+        if (productResult.rows.length > 0) {
+            product = productResult.rows[0];
+        } else {
+            // Check suits table
+            const suitResult = await query('SELECT * FROM suits WHERE id = $1', [product_id]);
+            if (suitResult.rows.length > 0) {
+                product = suitResult.rows[0];
+                // Map suit fields to product fields
+                product = {
+                    id: product.id,
+                    name: product.product_name,
+                    price: product.price,
+                    stock: product.stock_quantity,
+                    image_url: product.image_url
+                };
+            }
+        }
+        
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        if (product.stock < quantity) {
+            return res.status(400).json({ error: 'Not enough stock available' });
+        }
+        
+        // Get or create cart
+        let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
+        let cartId;
+        
+        if (cartResult.rows.length === 0) {
+            const newCart = await query('INSERT INTO cart (user_id) VALUES ($1) RETURNING id', [userId]);
+            cartId = newCart.rows[0].id;
+        } else {
+            cartId = cartResult.rows[0].id;
+        }
+        
+        // Check if item already in cart
+        const existingResult = await query(
+            'SELECT * FROM cart_items WHERE cart_id = $1 AND product_id = $2',
+            [cartId, product_id]
+        );
+        
+        if (existingResult.rows.length > 0) {
+            const newQuantity = existingResult.rows[0].quantity + quantity;
+            await query(
+                'UPDATE cart_items SET quantity = $1 WHERE id = $2',
+                [newQuantity, existingResult.rows[0].id]
+            );
+            res.json({ 
+                success: true, 
+                message: 'Cart updated',
+                item: { ...existingResult.rows[0], quantity: newQuantity }
+            });
+        } else {
+            const result = await query(
+                'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3) RETURNING id',
+                [cartId, product_id, quantity]
+            );
+            res.json({ 
+                success: true, 
+                message: 'Item added to cart',
+                item_id: result.rows[0].id
+            });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// PUT - Update cart item quantity
+app.put('/api/cart/update/:itemId', verifyToken, async (req, res) => {
+    const itemId = req.params.itemId;
+    const { quantity } = req.body;
+    const userId = req.user.id;
+    
+    if (!quantity || quantity < 1) {
+        return res.status(400).json({ error: 'Quantity must be at least 1' });
+    }
+    
+    try {
+        const result = await query(`
+            UPDATE cart_items 
+            SET quantity = $1 
+            WHERE id = $2 
+            AND cart_id IN (SELECT id FROM cart WHERE user_id = $3)
+            RETURNING id
+        `, [quantity, itemId, userId]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        res.json({ success: true, message: 'Cart updated' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// DELETE - Remove item from cart
+app.delete('/api/cart/remove/:itemId', verifyToken, async (req, res) => {
+    const itemId = req.params.itemId;
+    const userId = req.user.id;
+    
+    try {
+        const result = await query(`
+            DELETE FROM cart_items 
+            WHERE id = $1 
+            AND cart_id IN (SELECT id FROM cart WHERE user_id = $2)
+            RETURNING id
+        `, [itemId, userId]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        res.json({ success: true, message: 'Item removed from cart' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// POST - Checkout
 app.post('/api/checkout', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { shipping_address, payment_method = 'cash_on_delivery' } = req.body;
@@ -900,108 +1092,6 @@ app.post('/api/checkout', verifyToken, async (req, res) => {
     }
 });
 
-// --- Update Order Status (Admin) ---
-app.put('/api/orders/:orderId/status', verifyToken, verifyAdmin, async (req, res) => {
-    const { orderId } = req.params;
-    const { status, tracking_number } = req.body;
-    
-    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: 'Invalid status' });
-    }
-    
-    try {
-        if (tracking_number) {
-            await query(
-                'UPDATE orders SET status = $1, tracking_number = $2 WHERE id = $3 RETURNING id',
-                [status, tracking_number, orderId]
-            );
-        } else {
-            await query(
-                'UPDATE orders SET status = $1 WHERE id = $2 RETURNING id',
-                [status, orderId]
-            );
-        }
-        res.json({ success: true, message: 'Order status updated' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to update order' });
-    }
-});
-// ============================================================
-// SUITS ROUTES
-// ============================================================
-
-// Get all suits (API)
-app.get('/api/suits', async (req, res) => {
-    try {
-        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get single suit (API)
-app.get('/api/suits/:id', async (req, res) => {
-    try {
-        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Suit not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get featured suits (API)
-app.get('/api/suits/featured', async (req, res) => {
-    try {
-        const result = await query('SELECT * FROM suits WHERE featured = 1 ORDER BY created_at DESC LIMIT 6');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// --- Suits Page (Web) ---
-app.get('/suits', async (req, res) => {
-    try {
-        const user = getUserFromCookie(req);
-        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
-        res.render('pages/suits', {
-            title: 'Suits Collection',
-            user: user,
-            suits: result.rows
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
-});
-
-// --- Suit Detail Page (Web) ---
-app.get('/suits/:id', async (req, res) => {
-    try {
-        const user = getUserFromCookie(req);
-        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('Suit not found');
-        }
-        res.render('pages/suit-detail', {
-            title: result.rows[0].product_name,
-            user: user,
-            suit: result.rows[0]
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
-});
 // ============================================================
 // HEALTH CHECK
 // ============================================================
@@ -1037,6 +1127,7 @@ app.listen(PORT, () => {
     console.log(`🛒 Cart available at http://localhost:${PORT}/api/cart`);
     console.log(`👑 Admin dashboard at http://localhost:${PORT}/admin`);
     console.log(`🗄️ Database at http://localhost:${PORT}/database`);
+    console.log(`👔 Suits at http://localhost:${PORT}/suits`);
     console.log(`❤️  Health check at http://localhost:${PORT}/api/health`);
 });
 

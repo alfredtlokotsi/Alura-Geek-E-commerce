@@ -17,14 +17,14 @@
             <h1 class="page-title">All <span class="gold">Products</span></h1>
             
             <div class="product-grid">
-                <% locals.products.forEach(product => { %>
+                <% products.forEach(product => { %>
                     <div class="product-card">
                         <img src="/images/<%= product.image_url || 'placeholder.jpg' %>" 
                              alt="<%= product.name %>" 
                              onerror="this.src='/images/placeholder.jpg'">
                         <div class="info">
                             <h3><%= product.name %></h3>
-                            <p class="price">R <%= product.price.toFixed(2) %></p>
+                            <p class="price">R <%= parseFloat(product.price).toFixed(2) %></p>
                             <a href="/product/<%= product.id %>" class="btn">View Details</a>
                         </div>
                     </div>

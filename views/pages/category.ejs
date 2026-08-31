@@ -79,24 +79,24 @@
             font-size: 1.1rem;
             margin-bottom: 8px;
         }
+        .product-card .info .description {
+            color: #888;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
         .product-card .info .price {
             color: #D4AF37;
             font-size: 1.4rem;
             font-weight: 700;
             margin: 10px 0 15px;
         }
-        .product-card .info .btn {
-            width: 100%;
-        }
         .product-card .info .stock {
             color: #888;
             font-size: 0.85rem;
             margin-bottom: 10px;
         }
-        .product-card .info .description {
-            color: #888;
-            font-size: 0.85rem;
-            margin-bottom: 10px;
+        .product-card .info .btn {
+            width: 100%;
         }
         .empty-state {
             text-align: center;
@@ -199,8 +199,7 @@
                                 <p class="description"><%= product.description %></p>
                                 <p class="price">R <%= parseFloat(product.price).toFixed(2) %></p>
                                 <p class="stock">📦 <%= product.stock %> in stock</p>
-                                <button class="btn btn-primary btn-sm add-to-cart-btn" 
-                                        onclick="addToCart(<%= product.id %>)">
+                                <button class="btn btn-primary btn-sm" onclick="addToCart(<%= product.id %>)">
                                     <i class="fas fa-cart-plus"></i> Add to Cart
                                 </button>
                             </div>
@@ -238,19 +237,53 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    alert('✅ Item added to cart!');
+                    showNotification('✅ Item added to cart!', 'success');
                     const badge = document.getElementById('cartBadge');
                     if (badge) {
                         const current = parseInt(badge.textContent) || 0;
                         badge.textContent = current + 1;
                     }
                 } else {
-                    alert(data.error || 'Failed to add to cart');
+                    showNotification(data.error || 'Failed to add to cart', 'error');
                 }
             } catch (error) {
                 console.error('Error adding to cart:', error);
-                alert('An error occurred. Please try again.');
+                showNotification('An error occurred. Please try again.', 'error');
             }
+        }
+
+        function showNotification(message, type = 'info') {
+            const colors = {
+                success: '#D4AF37',
+                error: '#FF4444',
+                info: '#3498db'
+            };
+            
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 16px 24px;
+                background: #1A1A1A;
+                color: #FFFFFF;
+                border-left: 4px solid ${colors[type] || '#888'};
+                border-radius: 8px;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+                z-index: 9999;
+                max-width: 400px;
+                animation: slideIn 0.3s ease;
+                font-size: 0.95rem;
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
         }
     </script>
 

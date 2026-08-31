@@ -11,19 +11,19 @@
             <i class="fas fa-bars"></i>
         </button>
         
-<nav class="nav" id="mainNav">
-    <a href="/">Home</a>
-    <a href="/products">Shop</a>
-    <a href="/category/perfumes">Perfumes</a>
-    <a href="/category/fans">Fans</a>
-    <a href="/category/ties">Ties</a>
-    <a href="/suits">Suits</a>
-    <a href="/category/tools">Tools</a>
-    <a href="/about">About</a>
-    <% if (user && user.role === 'admin') { %>
-        <a href="/admin" class="admin-link">👑 Admin</a>
-    <% } %>
-</nav>
+        <nav class="nav" id="mainNav">
+            <a href="/">Home</a>
+            <a href="/products">Shop</a>
+            <a href="/category/perfumes">Perfumes</a>
+            <a href="/category/fans">Fans</a>
+            <a href="/category/ties">Ties</a>
+            <a href="/suits">Suits</a>
+            <a href="/category/tools">Tools</a>
+            <a href="/about">About</a>
+            <% if (user && user.role === 'admin') { %>
+                <a href="/admin" class="admin-link">👑 Admin</a>
+            <% } %>
+        </nav>
         
         <div class="header-right">
             <!-- Search -->
@@ -90,7 +90,7 @@
     <a href="/category/perfumes">Perfumes</a>
     <a href="/category/fans">Fans</a>
     <a href="/category/ties">Ties</a>
-    <a href="/category/suits">Suits</a>
+    <a href="/suits">Suits</a>
     <a href="/category/tools">Tools</a>
     <a href="/about">About</a>
     <% if (user && user.role === 'admin') { %>
@@ -100,66 +100,6 @@
     <a href="/cart">🛒 Cart</a>
     <a href="/orders">📦 Orders</a>
     <a href="/wishlist">❤️ Wishlist</a>
-</div>
-
-<!-- MODALS -->
-<div class="modal" id="loginModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Welcome Back</h2>
-            <button class="modal-close" id="closeLoginModal">&times;</button>
-        </div>
-        <form id="loginForm" class="auth-form">
-            <div class="form-group">
-                <label for="loginEmail">Email</label>
-                <input type="email" id="loginEmail" placeholder="you@example.com" required />
-            </div>
-            <div class="form-group">
-                <label for="loginPassword">Password</label>
-                <input type="password" id="loginPassword" placeholder="Enter your password" required />
-            </div>
-            <div class="form-group" style="display:flex;align-items:center;gap:10px;">
-                <input type="checkbox" id="rememberMe" />
-                <label for="rememberMe" style="color:#888;font-weight:400;">Remember Me</label>
-            </div>
-            <div class="form-error" id="loginError"></div>
-            <button type="submit" class="btn btn-primary btn-full">Log In</button>
-            <p class="form-footer">
-                Don't have an account? <a href="#" id="switchToSignup">Sign up</a>
-            </p>
-            <p class="form-footer">
-                <a href="#" id="forgotPasswordLink" style="color:#888;font-size:0.85rem;">Forgot Password?</a>
-            </p>
-        </form>
-    </div>
-</div>
-
-<div class="modal" id="signupModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Create Account</h2>
-            <button class="modal-close" id="closeSignupModal">&times;</button>
-        </div>
-        <form id="signupForm" class="auth-form">
-            <div class="form-group">
-                <label for="signupName">Full Name</label>
-                <input type="text" id="signupName" placeholder="John Doe" required />
-            </div>
-            <div class="form-group">
-                <label for="signupEmail">Email</label>
-                <input type="email" id="signupEmail" placeholder="you@example.com" required />
-            </div>
-            <div class="form-group">
-                <label for="signupPassword">Password</label>
-                <input type="password" id="signupPassword" placeholder="At least 6 characters" required />
-            </div>
-            <div class="form-error" id="signupError"></div>
-            <button type="submit" class="btn btn-primary btn-full">Create Account</button>
-            <p class="form-footer">
-                Already have an account? <a href="#" id="switchToLogin">Log in</a>
-            </p>
-        </form>
-    </div>
 </div>
 
 <script>
@@ -174,6 +114,4 @@
             document.getElementById('mobileMenu').classList.remove('active');
         });
     });
-
-    // Auth functions will be loaded from /js/auth.js
 </script>

@@ -22,7 +22,7 @@
                     <p>Premium curated goods for the discerning soul.</p>
                     <div class="hero-buttons">
                         <a href="/products" class="btn btn-primary">Explore Collection</a>
-                        <a href="/category/perfumes" class="btn btn-outline">Shop Perfumes</a>
+                        <a href="/suits" class="btn btn-outline">Shop Suits</a>
                     </div>
                 </div>
             </div>
@@ -115,109 +115,6 @@
             </div>
         </section>
     </main>
-
-    <script>
-        async function addToCart(productId) {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                alert('Please log in first!');
-                document.getElementById('loginBtn')?.click();
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/cart/add', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ product_id: productId, quantity: 1 })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showNotification('✅ Item added to cart!', 'success');
-                    const badge = document.getElementById('cartBadge');
-                    if (badge) {
-                        const current = parseInt(badge.textContent) || 0;
-                        badge.textContent = current + 1;
-                    }
-                } else {
-                    showNotification(data.error || 'Failed to add to cart', 'error');
-                }
-            } catch (error) {
-                console.error('Error adding to cart:', error);
-                showNotification('An error occurred. Please try again.', 'error');
-            }
-        }
-
-        async function addToWishlist(productId) {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                alert('Please log in first!');
-                document.getElementById('loginBtn')?.click();
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/wishlist/add', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ product_id: productId })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showNotification('❤️ Added to wishlist!', 'success');
-                } else {
-                    showNotification(data.error || 'Failed to add to wishlist', 'error');
-                }
-            } catch (error) {
-                console.error('Error adding to wishlist:', error);
-                showNotification('An error occurred. Please try again.', 'error');
-            }
-        }
-
-        function showNotification(message, type = 'info') {
-            const colors = {
-                success: '#D4AF37',
-                error: '#FF4444',
-                info: '#3498db'
-            };
-            
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                padding: 16px 24px;
-                background: #1A1A1A;
-                color: #FFFFFF;
-                border-left: 4px solid ${colors[type] || '#888'};
-                border-radius: 8px;
-                box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-                z-index: 9999;
-                max-width: 400px;
-                animation: slideIn 0.3s ease;
-                font-size: 0.95rem;
-            `;
-            notification.textContent = message;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transition = 'opacity 0.3s ease';
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
-    </script>
 
     <%- include('../partials/footer', { user: locals.user }) %>
 </body>
