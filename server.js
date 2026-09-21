@@ -8,10 +8,7 @@ const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const cron = require('node-cron');
-const { exec } = require('child_process');
 
-// Import middleware
 const { verifyToken, verifyAdmin } = require('./middleware/auth');
 
 dotenv.config();
@@ -19,34 +16,16 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- Security Middleware ---
-app.use(helmet());
-
-// --- Rate Limiting ---
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: { error: 'Too many requests, please try again later.' }
-});
-app.use('/api/', limiter);
-
-// --- CORS ---
-app.use(cors({
-    origin: ['http://localhost:3000', 'https://your-app.onrender.com'],
-    credentials: true
-}));
-
-// --- Body Parsers ---
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public'), {
-    maxAge: '1y',
-    immutable: true
-}));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================
-// DATABASE SETUP
+// DATABASE
 // ============================================================
 
 let pool;
@@ -54,298 +33,140 @@ let pool;
 if (process.env.DATABASE_URL) {
     pool = new Pool({
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false },
-        connectionTimeoutMillis: 10000,
-        idleTimeoutMillis: 30000,
+        ssl: { rejectUnauthorized: false }
     });
-    console.log('✅ Using PostgreSQL database');
+    console.log('✅ Using PostgreSQL');
 } else {
-    console.log('⚠️ No DATABASE_URL found, using SQLite for local development');
+    console.log('⚠️ No DATABASE_URL, using SQLite');
     const sqlite3 = require('sqlite3').verbose();
     const db = new sqlite3.Database(path.join(__dirname, 'database', 'store.db'));
     
     pool = {
-        query: (text, params) => {
-            return new Promise((resolve, reject) => {
-                const upperText = text.toUpperCase().trim();
-                
-                if (upperText.startsWith('SELECT')) {
-                    db.all(text, params || [], (err, rows) => {
-                        if (err) reject(err);
-                        else resolve({ rows: rows || [], rowCount: (rows || []).length });
-                    });
-                } else if (upperText.includes('INSERT') && upperText.includes('RETURNING')) {
-                    db.run(text, params || [], function(err) {
-                        if (err) reject(err);
-                        else resolve({ rows: [{ id: this.lastID }], rowCount: 1 });
-                    });
-                } else if (upperText.startsWith('INSERT') || upperText.startsWith('UPDATE') || upperText.startsWith('DELETE')) {
-                    db.run(text, params || [], function(err) {
-                        if (err) reject(err);
-                        else resolve({ rows: [], rowCount: this.changes });
-                    });
-                } else {
-                    db.all(text, params || [], (err, rows) => {
-                        if (err) reject(err);
-                        else resolve({ rows: rows || [], rowCount: (rows || []).length });
-                    });
-                }
-            });
-        },
-        connect: (callback) => { callback(null, db, () => {}); },
-        end: () => { db.close(); }
+        query: (text, params) => new Promise((resolve, reject) => {
+            const upper = text.toUpperCase().trim();
+            if (upper.startsWith('SELECT')) {
+                db.all(text, params || [], (err, rows) => err ? reject(err) : resolve({ rows: rows || [], rowCount: (rows || []).length }));
+            } else if (upper.includes('RETURNING')) {
+                db.run(text, params || [], function(err) { err ? reject(err) : resolve({ rows: [{ id: this.lastID }], rowCount: 1 }); });
+            } else {
+                db.run(text, params || [], function(err) { err ? reject(err) : resolve({ rows: [], rowCount: this.changes }); });
+            }
+        }),
+        connect: (cb) => cb(null, db, () => {}),
+        end: () => db.close()
     };
-    console.log('✅ Using SQLite database locally');
 }
-
-// Test connection
-pool.query('SELECT NOW() as now', (err, res) => {
-    if (err) {
-        console.error('❌ Database connection error:', err.message);
-    } else {
-        console.log('✅ Database connected successfully');
-    }
-});
 
 const query = (text, params) => pool.query(text, params);
 
+pool.query('SELECT NOW()').then(() => console.log('✅ DB connected')).catch(e => console.error('❌ DB error:', e.message));
+
 // ============================================================
-// DATABASE INITIALIZATION
+// DATABASE INIT
 // ============================================================
 
 async function initDatabase() {
     try {
-        // Users
-        await query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT DEFAULT 'user',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL, role TEXT DEFAULT 'user', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Categories
-        await query(`
-            CREATE TABLE IF NOT EXISTS categories (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE,
-                slug TEXT NOT NULL UNIQUE,
-                description TEXT,
-                icon TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS categories (
+            id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, slug TEXT NOT NULL UNIQUE,
+            description TEXT, icon TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Products
-        await query(`
-            CREATE TABLE IF NOT EXISTS products (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                price DECIMAL(10,2) NOT NULL,
-                image_url TEXT,
-                category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-                stock INTEGER DEFAULT 10,
-                featured INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+            price DECIMAL(10,2) NOT NULL, image_url TEXT,
+            category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+            stock INTEGER DEFAULT 10, featured INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Cart
-        await query(`
-            CREATE TABLE IF NOT EXISTS cart (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS cart (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Cart Items
-        await query(`
-            CREATE TABLE IF NOT EXISTS cart_items (
-                id SERIAL PRIMARY KEY,
-                cart_id INTEGER NOT NULL REFERENCES cart(id) ON DELETE CASCADE,
-                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                quantity INTEGER DEFAULT 1,
-                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS cart_items (
+            id SERIAL PRIMARY KEY, cart_id INTEGER NOT NULL REFERENCES cart(id) ON DELETE CASCADE,
+            product_id INTEGER NOT NULL, quantity INTEGER DEFAULT 1,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Orders
-        await query(`
-            CREATE TABLE IF NOT EXISTS orders (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
-                total_amount DECIMAL(10,2),
-                status TEXT DEFAULT 'pending',
-                shipping_address TEXT,
-                payment_method TEXT DEFAULT 'cash_on_delivery',
-                tracking_number TEXT,
-                estimated_delivery DATE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS orders (
+            id TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id),
+            total_amount DECIMAL(10,2), status TEXT DEFAULT 'pending',
+            shipping_address TEXT, payment_method TEXT DEFAULT 'cash_on_delivery',
+            tracking_number TEXT, estimated_delivery DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Order Items
-        await query(`
-            CREATE TABLE IF NOT EXISTS order_items (
-                id SERIAL PRIMARY KEY,
-                order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-                product_id INTEGER REFERENCES products(id),
-                product_name TEXT NOT NULL,
-                quantity INTEGER NOT NULL,
-                price DECIMAL(10,2) NOT NULL
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS order_items (
+            id SERIAL PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+            product_id INTEGER, product_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL, price DECIMAL(10,2) NOT NULL)`);
 
-        // Wishlist
-        await query(`
-            CREATE TABLE IF NOT EXISTS wishlist (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, product_id)
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS wishlist (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, product_id))`);
 
-        // Reviews
-        await query(`
-            CREATE TABLE IF NOT EXISTS reviews (
-                id SERIAL PRIMARY KEY,
-                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                rating INTEGER CHECK (rating >= 1 AND rating <= 5),
-                comment TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS reviews (
+            id SERIAL PRIMARY KEY, product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+            comment TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Suits
-        await query(`
-            CREATE TABLE IF NOT EXISTS suits (
-                id SERIAL PRIMARY KEY,
-                product_name TEXT NOT NULL,
-                color TEXT,
-                fit_type TEXT,
-                pieces_count INTEGER DEFAULT 3,
-                jacket_style TEXT,
-                waistcoat_style TEXT,
-                accessories_included TEXT,
-                price DECIMAL(10,2) NOT NULL,
-                stock_quantity INTEGER DEFAULT 10,
-                image_url TEXT,
-                featured INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        await query(`CREATE TABLE IF NOT EXISTS suits (
+            id SERIAL PRIMARY KEY, product_name TEXT NOT NULL, color TEXT,
+            fit_type TEXT, pieces_count INTEGER DEFAULT 3, jacket_style TEXT,
+            waistcoat_style TEXT, accessories_included TEXT,
+            price DECIMAL(10,2) NOT NULL, stock_quantity INTEGER DEFAULT 10,
+            image_url TEXT, featured INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
         console.log('✅ Tables initialized');
 
-        // Insert categories if empty
-        const categoriesResult = await query('SELECT COUNT(*) FROM categories');
-        if (parseInt(categoriesResult.rows[0].count) === 0) {
-            await query(`
-                INSERT INTO categories (name, slug, description, icon) VALUES 
-                ('Perfumes', 'perfumes', 'Luxury fragrances for every occasion', 'fa-perfume'),
-                ('Fans', 'fans', 'Elegant fans for comfort and style', 'fa-fan'),
-                ('Ties', 'ties', 'Premium ties for the sophisticated gentleman', 'fa-tie'),
+        // Categories
+        const catCheck = await query('SELECT COUNT(*) FROM categories');
+        if (parseInt(catCheck.rows[0].count) === 0) {
+            await query(`INSERT INTO categories (name, slug, description, icon) VALUES 
+                ('Perfumes', 'perfumes', 'Luxury fragrances for every occasion', 'fa-spray-can-sparkles'),
+                ('Ties', 'ties', 'Premium ties for the sophisticated gentleman', 'fa-user-tie'),
                 ('Suits', 'suits', 'Tailored suits for the modern professional', 'fa-user-tie'),
-                ('Tools', 'tools', 'Quality tools for every project', 'fa-tools')
-            `);
+                ('Chinos', 'chinos', 'Smart-casual chinos for everyday wear', 'fa-person'),
+                ('Shirts', 'shirts', 'Premium shirts for every occasion', 'fa-shirt'),
+                ('Trousers', 'trousers', 'Tailored trousers for a sharp look', 'fa-socks')`);
             console.log('✅ Categories inserted');
         }
 
-        // Insert sample products if empty
-        const productsResult = await query('SELECT COUNT(*) FROM products');
-        if (parseInt(productsResult.rows[0].count) === 0) {
-            await query(`
-                INSERT INTO products (name, description, price, image_url, category_id, stock, featured) VALUES 
-                ('Royal Oud', 'Premium oud fragrance with woody and spicy notes', 89.99, 'royal-oud.jpg', 1, 20, 1),
-                ('Velvet Rose', 'Romantic rose scent with hints of vanilla', 69.99, 'velvet-rose.jpg', 1, 15, 1),
-                ('Ocean Breeze', 'Fresh marine fragrance with citrus notes', 49.99, 'ocean-breeze.jpg', 1, 25, 0),
-                ('Midnight Noir', 'Mysterious night scent with amber and musk', 79.99, 'midnight-noir.jpg', 1, 12, 0),
-                ('Mahogany Fan', 'Handcrafted wooden fan with intricate carvings', 34.99, 'mahogany-fan.jpg', 2, 10, 1),
-                ('Silk Fan', 'Elegant silk folding fan with floral pattern', 24.99, 'silk-fan.jpg', 2, 8, 0),
-                ('Bamboo Fan', 'Eco-friendly bamboo fan with hand-painted design', 19.99, 'bamboo-fan.jpg', 2, 15, 0),
-                ('Silk Tie', 'Premium silk tie with subtle pattern', 45.99, 'silk-tie.jpg', 3, 12, 1),
-                ('Wool Tie', 'Classic wool tie for formal occasions', 39.99, 'wool-tie.jpg', 3, 10, 0),
-                ('Linen Tie', 'Lightweight linen tie for summer', 35.99, 'linen-tie.jpg', 3, 8, 0),
-                ('Navy Suit', 'Classic navy blue suit with peak lapels', 299.99, 'navy-suit.jpg', 4, 5, 1),
-                ('Charcoal Suit', 'Modern charcoal suit with slim fit', 349.99, 'charcoal-suit.jpg', 4, 3, 0),
-                ('Black Tuxedo', 'Elegant black tuxedo for special events', 399.99, 'black-tuxedo.jpg', 4, 4, 1),
-                ('Premium Hammer', 'Professional hammer with ergonomic grip', 29.99, 'hammer.jpg', 5, 15, 1),
-                ('Screwdriver Set', '10-piece professional screwdriver set', 49.99, 'screwdriver-set.jpg', 5, 10, 0),
-                ('Precision Pliers', 'High-quality precision pliers', 24.99, 'pliers.jpg', 5, 12, 0)
-            `);
-            console.log('✅ Products inserted');
-        }
-
-        // Create admin user
-        const adminResult = await query("SELECT COUNT(*) FROM users WHERE email = 'admin@exploreessence.com'");
-        if (parseInt(adminResult.rows[0].count) === 0) {
+        // Admin user
+        const adminCheck = await query("SELECT COUNT(*) FROM users WHERE email = 'admin@exploreessence.com'");
+        if (parseInt(adminCheck.rows[0].count) === 0) {
             const bcrypt = require('bcryptjs');
-            const hashedPassword = bcrypt.hashSync('admin123', 10);
-            await query(
-                "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)",
-                ['Admin', 'admin@exploreessence.com', hashedPassword, 'admin']
-            );
-            console.log('✅ Admin user created');
+            const hash = bcrypt.hashSync('admin123', 10);
+            await query("INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)",
+                ['Admin', 'admin@exploreessence.com', hash, 'admin']);
+            console.log('✅ Admin created: admin@exploreessence.com / admin123');
         }
-
     } catch (err) {
-        console.error('Database initialization error:', err);
+        console.error('Init error:', err);
     }
 }
 
 initDatabase();
 
 // ============================================================
-// SCHEDULED BACKUPS (Daily at 2 AM)
+// ROUTES
 // ============================================================
 
-cron.schedule('0 2 * * *', () => {
-    console.log('🔄 Running database backup...');
-    exec('npm run backup', (error, stdout, stderr) => {
-        if (error) {
-            console.error('❌ Backup failed:', error);
-        } else {
-            console.log('✅ Backup completed:', stdout);
-        }
-    });
-});
-
-// ============================================================
-// IMPORT ROUTES
-// ============================================================
-
-const authRoutes = require('./routes/auth')(pool);
-
-app.use('/api/auth', authRoutes);
-
-// ============================================================
-// VIEW ENGINE
-// ============================================================
+app.use('/api/auth', require('./routes/auth')(pool));
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-
-// ============================================================
-// HELPER: Get User from Cookie
-// ============================================================
 
 const getUserFromCookie = (req) => {
     let user = null;
     const token = req.cookies?.token;
     if (token) {
-        try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            user = decoded;
-        } catch (error) {}
+        try { user = jwt.verify(token, process.env.JWT_SECRET); } catch (e) {}
     }
     return user;
 };
@@ -354,781 +175,411 @@ const getUserFromCookie = (req) => {
 // WEB ROUTES
 // ============================================================
 
-// --- Homepage ---
 app.get('/', async (req, res) => {
     try {
         const user = getUserFromCookie(req);
         const featured = await query('SELECT * FROM products WHERE featured = 1 ORDER BY created_at DESC LIMIT 8');
         const newArrivals = await query('SELECT * FROM products ORDER BY created_at DESC LIMIT 4');
-        const categories = await query('SELECT * FROM categories');
-        
-        res.render('pages/index', { 
-            title: 'Home', 
-            user: user,
-            featured: featured.rows,
-            newArrivals: newArrivals.rows,
-            categories: categories.rows
-        });
+        res.render('pages/index', { title: 'Home', user, featured: featured.rows, newArrivals: newArrivals.rows });
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
+        console.error(err); res.status(500).send('DB error');
     }
 });
 
-// --- Shop All ---
 app.get('/products', async (req, res) => {
     try {
         const user = getUserFromCookie(req);
         const result = await query('SELECT * FROM products ORDER BY created_at DESC');
-        res.render('pages/products', { 
-            title: 'Shop All', 
-            user: user,
-            products: result.rows 
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+        res.render('pages/products', { title: 'Shop All', user, products: result.rows });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Search ---
+// Category Pages - All use same pattern
+const categories = ['perfumes', 'ties', 'chinos', 'shirts', 'trousers'];
+categories.forEach(slug => {
+    app.get(`/${slug}`, async (req, res) => {
+        try {
+            const user = getUserFromCookie(req);
+            const result = await query(
+                'SELECT * FROM products WHERE category_id = (SELECT id FROM categories WHERE slug = $1) ORDER BY featured DESC, name',
+                [slug]
+            );
+            const title = slug.charAt(0).toUpperCase() + slug.slice(1);
+            res.render(`pages/${slug}`, { title, user, products: result.rows });
+        } catch (err) { console.error(err); res.status(500).send('DB error'); }
+    });
+});
+
+// Suits (separate table)
+app.get('/suits', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
+        res.render('pages/suits', { title: 'Suits', user, suits: result.rows });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
+});
+
+app.get('/suits/:id', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) return res.status(404).send('Suit not found');
+        res.render('pages/suit-detail', { title: result.rows[0].product_name, user, suit: result.rows[0] });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
+});
+
+// Product Detail
+app.get('/product/:id', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const productResult = await query(`
+            SELECT p.*, COALESCE(AVG(r.rating), 0) as avg_rating, COUNT(r.id) as review_count
+            FROM products p LEFT JOIN reviews r ON p.id = r.product_id
+            WHERE p.id = $1 GROUP BY p.id`, [req.params.id]);
+        if (productResult.rows.length === 0) return res.status(404).send('Product not found');
+        const product = productResult.rows[0];
+        const relatedResult = await query(
+            'SELECT * FROM products WHERE category_id = $1 AND id != $2 ORDER BY RANDOM() LIMIT 4',
+            [product.category_id, req.params.id]);
+        const reviewsResult = await query(`
+            SELECT r.*, u.name as user_name FROM reviews r
+            JOIN users u ON r.user_id = u.id WHERE r.product_id = $1
+            ORDER BY r.created_at DESC LIMIT 10`, [req.params.id]);
+        res.render('pages/product', { title: product.name, user, product, related: relatedResult.rows, reviews: reviewsResult.rows });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
+});
+
+// Search
 app.get('/search', async (req, res) => {
     try {
         const user = getUserFromCookie(req);
         const { q } = req.query;
         let products = [];
-        
         if (q) {
             const result = await query(
-                `SELECT * FROM products 
-                 WHERE name ILIKE $1 OR description ILIKE $1 
-                 ORDER BY name LIMIT 20`,
-                [`%${q}%`]
-            );
+                'SELECT * FROM products WHERE name ILIKE $1 OR description ILIKE $1 ORDER BY name LIMIT 20',
+                [`%${q}%`]);
             products = result.rows;
         }
-        
-        res.render('pages/search', { 
-            title: 'Search Results', 
-            user: user,
-            query: q || '',
-            products: products
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+        res.render('pages/search', { title: 'Search', user, query: q || '', products });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Category Page ---
-app.get('/category/:slug', async (req, res) => {
-    try {
-        const user = getUserFromCookie(req);
-        const slug = req.params.slug;
-        
-        const categoryResult = await query('SELECT * FROM categories WHERE slug = $1', [slug]);
-        if (categoryResult.rows.length === 0) {
-            return res.status(404).send('Category not found');
-        }
-        const category = categoryResult.rows[0];
-        
-        const productsResult = await query(
-            'SELECT * FROM products WHERE category_id = $1 ORDER BY featured DESC, name',
-            [category.id]
-        );
-        
-        res.render('pages/category', {
-            title: category.name,
-            user: user,
-            category: category,
-            products: productsResult.rows
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
-});
-
-// --- Product Detail ---
-app.get('/product/:id', async (req, res) => {
-    try {
-        const user = getUserFromCookie(req);
-        const productId = req.params.id;
-        
-        const productResult = await query(`
-            SELECT p.*, 
-                COALESCE(AVG(r.rating), 0) as avg_rating,
-                COUNT(r.id) as review_count
-            FROM products p
-            LEFT JOIN reviews r ON p.id = r.product_id
-            WHERE p.id = $1
-            GROUP BY p.id
-        `, [productId]);
-        
-        if (productResult.rows.length === 0) {
-            return res.status(404).send('Product not found');
-        }
-        const product = productResult.rows[0];
-        
-        const relatedResult = await query(
-            `SELECT * FROM products 
-             WHERE category_id = $1 AND id != $2 
-             ORDER BY RANDOM() LIMIT 4`,
-            [product.category_id, productId]
-        );
-        
-        const reviewsResult = await query(`
-            SELECT r.*, u.name as user_name 
-            FROM reviews r
-            JOIN users u ON r.user_id = u.id
-            WHERE r.product_id = $1
-            ORDER BY r.created_at DESC
-            LIMIT 10
-        `, [productId]);
-        
-        res.render('pages/product', { 
-            title: product.name, 
-            user: user,
-            product: product,
-            related: relatedResult.rows,
-            reviews: reviewsResult.rows
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
-});
-
-// --- Suits Page ---
-app.get('/suits', async (req, res) => {
-    try {
-        const user = getUserFromCookie(req);
-        const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
-        res.render('pages/suits', {
-            title: 'Suits Collection',
-            user: user,
-            suits: result.rows
-        });
-    } catch (err) {
-        console.error('❌ Suits page error:', err);
-        res.status(500).send('Database error: ' + err.message);
-    }
-});
-
-// --- Suit Detail Page ---
-app.get('/suits/:id', async (req, res) => {
-    try {
-        const user = getUserFromCookie(req);
-        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('Suit not found');
-        }
-        res.render('pages/suit-detail', {
-            title: result.rows[0].product_name,
-            user: user,
-            suit: result.rows[0]
-        });
-    } catch (err) {
-        console.error('❌ Suit detail error:', err);
-        res.status(500).send('Database error');
-    }
-});
-
-// --- Cart Page ---
+// Cart
 app.get('/cart', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
-        
         let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
         let cartId;
-        
         if (cartResult.rows.length === 0) {
             const newCart = await query('INSERT INTO cart (user_id) VALUES ($1) RETURNING id', [userId]);
             cartId = newCart.rows[0].id;
-        } else {
-            cartId = cartResult.rows[0].id;
-        }
-        
+        } else { cartId = cartResult.rows[0].id; }
+
         const itemsResult = await query(`
             SELECT ci.*, p.name, p.price, p.image_url, p.stock
             FROM cart_items ci
-            JOIN products p ON ci.product_id = p.id
-            WHERE ci.cart_id = $1
-        `, [cartId]);
-        
+            LEFT JOIN products p ON ci.product_id = p.id
+            WHERE ci.cart_id = $1`, [cartId]);
+
         let subtotal = 0;
-        itemsResult.rows.forEach(item => {
-            subtotal += parseFloat(item.price) * item.quantity;
-        });
-        
+        itemsResult.rows.forEach(item => { subtotal += parseFloat(item.price || 0) * item.quantity; });
         const tax = subtotal * 0.15;
         const shipping = subtotal > 500 ? 0 : 50;
         const total = subtotal + tax + shipping;
-        
+
         res.render('pages/cart', {
-            title: 'Your Cart',
-            user: req.user,
-            items: itemsResult.rows,
-            subtotal: subtotal.toFixed(2),
-            tax: tax.toFixed(2),
-            shipping: shipping.toFixed(2),
-            total: total.toFixed(2)
+            title: 'Cart', user: req.user, items: itemsResult.rows,
+            subtotal: subtotal.toFixed(2), tax: tax.toFixed(2),
+            shipping: shipping.toFixed(2), total: total.toFixed(2)
         });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Checkout Page ---
+// Checkout
 app.get('/checkout', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
-        
         const cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
-        if (cartResult.rows.length === 0) {
-            return res.redirect('/cart');
-        }
-        const cartId = cartResult.rows[0].id;
-        
+        if (cartResult.rows.length === 0) return res.redirect('/cart');
         const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price, p.image_url
-            FROM cart_items ci
-            JOIN products p ON ci.product_id = p.id
-            WHERE ci.cart_id = $1
-        `, [cartId]);
-        
-        if (itemsResult.rows.length === 0) {
-            return res.redirect('/cart');
-        }
-        
+            SELECT ci.*, p.name, p.price, p.image_url FROM cart_items ci
+            LEFT JOIN products p ON ci.product_id = p.id
+            WHERE ci.cart_id = $1`, [cartResult.rows[0].id]);
+        if (itemsResult.rows.length === 0) return res.redirect('/cart');
+
         let subtotal = 0;
-        itemsResult.rows.forEach(item => {
-            subtotal += parseFloat(item.price) * item.quantity;
-        });
-        
+        itemsResult.rows.forEach(item => { subtotal += parseFloat(item.price || 0) * item.quantity; });
         const tax = subtotal * 0.15;
         const shipping = subtotal > 500 ? 0 : 50;
         const total = subtotal + tax + shipping;
-        
+
         res.render('pages/checkout', {
-            title: 'Checkout',
-            user: req.user,
-            items: itemsResult.rows,
-            subtotal: subtotal.toFixed(2),
-            tax: tax.toFixed(2),
-            shipping: shipping.toFixed(2),
-            total: total.toFixed(2)
+            title: 'Checkout', user: req.user, items: itemsResult.rows,
+            subtotal: subtotal.toFixed(2), tax: tax.toFixed(2),
+            shipping: shipping.toFixed(2), total: total.toFixed(2)
         });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Orders ---
+// Orders
 app.get('/orders', verifyToken, async (req, res) => {
     try {
-        const userId = req.user.id;
         const result = await query(`
-            SELECT o.*, 
-                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
-            FROM orders o
-            WHERE o.user_id = $1
-            ORDER BY o.created_at DESC
-        `, [userId]);
-        
-        res.render('pages/orders', {
-            title: 'My Orders',
-            user: req.user,
-            orders: result.rows || []
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+            SELECT o.*, (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+            FROM orders o WHERE o.user_id = $1 ORDER BY o.created_at DESC`, [req.user.id]);
+        res.render('pages/orders', { title: 'My Orders', user: req.user, orders: result.rows || [] });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Order Details ---
 app.get('/orders/:orderId', verifyToken, async (req, res) => {
     try {
-        const userId = req.user.id;
-        const orderId = req.params.orderId;
-        
-        const orderResult = await query(
-            'SELECT * FROM orders WHERE id = $1 AND user_id = $2',
-            [orderId, userId]
-        );
-        
-        if (orderResult.rows.length === 0) {
-            return res.status(404).send('Order not found');
-        }
-        
-        const itemsResult = await query(
-            'SELECT * FROM order_items WHERE order_id = $1',
-            [orderId]
-        );
-        
-        res.render('pages/order-detail', {
-            title: 'Order Details',
-            user: req.user,
-            order: orderResult.rows[0],
-            items: itemsResult.rows || []
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+        const orderResult = await query('SELECT * FROM orders WHERE id = $1 AND user_id = $2',
+            [req.params.orderId, req.user.id]);
+        if (orderResult.rows.length === 0) return res.status(404).send('Order not found');
+        const itemsResult = await query('SELECT * FROM order_items WHERE order_id = $1', [req.params.orderId]);
+        res.render('pages/order-detail', { title: 'Order', user: req.user, order: orderResult.rows[0], items: itemsResult.rows || [] });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Wishlist ---
+// Wishlist
 app.get('/wishlist', verifyToken, async (req, res) => {
     try {
         const result = await query(`
-            SELECT p.* FROM wishlist w
-            JOIN products p ON w.product_id = p.id
-            WHERE w.user_id = $1
-        `, [req.user.id]);
-        
-        res.render('pages/wishlist', {
-            title: 'My Wishlist',
-            user: req.user,
-            products: result.rows
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+            SELECT p.* FROM wishlist w JOIN products p ON w.product_id = p.id
+            WHERE w.user_id = $1`, [req.user.id]);
+        res.render('pages/wishlist', { title: 'Wishlist', user: req.user, products: result.rows });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Profile ---
+// Profile
 app.get('/profile', verifyToken, async (req, res) => {
     try {
-        const userResult = await query(
-            'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
-            [req.user.id]
-        );
-        
-        const ordersResult = await query(
-            'SELECT COUNT(*) as total_orders FROM orders WHERE user_id = $1',
-            [req.user.id]
-        );
-        
-        const wishlistResult = await query(
-            'SELECT COUNT(*) as total_wishlist FROM wishlist WHERE user_id = $1',
-            [req.user.id]
-        );
-        
-        const cartResult = await query(
-            'SELECT COUNT(*) as total_cart FROM cart_items ci JOIN cart c ON ci.cart_id = c.id WHERE c.user_id = $1',
-            [req.user.id]
-        );
-        
+        const userResult = await query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.user.id]);
+        const ordersResult = await query('SELECT COUNT(*) as total_orders FROM orders WHERE user_id = $1', [req.user.id]);
+        const wishlistResult = await query('SELECT COUNT(*) as total_wishlist FROM wishlist WHERE user_id = $1', [req.user.id]);
+        const cartResult = await query('SELECT COUNT(*) as total_cart FROM cart_items ci JOIN cart c ON ci.cart_id = c.id WHERE c.user_id = $1', [req.user.id]);
         res.render('pages/profile', {
-            title: 'My Profile',
-            user: req.user,
-            profile: userResult.rows[0],
+            title: 'Profile', user: req.user, profile: userResult.rows[0],
             stats: {
                 orders: ordersResult.rows[0].total_orders || 0,
                 wishlist: wishlistResult.rows[0].total_wishlist || 0,
                 cart: cartResult.rows[0].total_cart || 0
             }
         });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Admin Dashboard ---
+// Admin
 app.get('/admin', verifyToken, verifyAdmin, async (req, res) => {
     try {
         const usersResult = await query('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC');
-        const ordersResult = await query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 20');
-        const productsResult = await query('SELECT COUNT(*) as count FROM products');
-        const totalOrders = await query('SELECT COUNT(*) as count, SUM(total_amount) as total FROM orders');
-        const pendingOrders = await query('SELECT COUNT(*) as count FROM orders WHERE status = $1', ['pending']);
-        
-        res.render('pages/admin', { 
-            title: 'Admin Dashboard',
-            user: req.user,
-            users: usersResult.rows,
-            orders: ordersResult.rows,
-            stats: {
-                totalProducts: productsResult.rows[0].count,
-                totalOrders: totalOrders.rows[0].count || 0,
-                totalRevenue: totalOrders.rows[0].total || 0,
-                pendingOrders: pendingOrders.rows[0].count || 0
-            }
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Database error');
-    }
+        res.render('pages/admin', { title: 'Admin', user: req.user, users: usersResult.rows });
+    } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// --- Database Manager ---
-app.get('/database', verifyToken, verifyAdmin, (req, res) => {
-    res.render('pages/database-manager', {
-        title: 'Database Manager',
-        user: req.user
-    });
-});
-
-// --- About ---
+// About
 app.get('/about', (req, res) => {
     const user = getUserFromCookie(req);
-    res.render('pages/about', { 
-        title: 'About Explore Essence',
-        user: user
-    });
+    res.render('pages/about', { title: 'About', user });
 });
 
 // ============================================================
-// SUITS API ROUTES
+// API ROUTES
 // ============================================================
 
-// Get all suits (API)
+// Products API
+app.get('/api/products', async (req, res) => {
+    try {
+        const result = await query('SELECT * FROM products ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Suits API
 app.get('/api/suits', async (req, res) => {
     try {
         const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
         res.json(result.rows);
-    } catch (err) {
-        console.error('API Suits error:', err);
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Get single suit (API)
-app.get('/api/suits/:id', async (req, res) => {
-    try {
-        const result = await query('SELECT * FROM suits WHERE id = $1', [req.params.id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Suit not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('API Suit detail error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Get featured suits (API)
-app.get('/api/suits/featured', async (req, res) => {
-    try {
-        const result = await query('SELECT * FROM suits WHERE featured = 1 ORDER BY created_at DESC LIMIT 6');
-        res.json(result.rows);
-    } catch (err) {
-        console.error('API Featured suits error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ============================================================
-// API ROUTES - Cart, Orders, etc.
-// ============================================================
-
-// GET cart
-app.get('/api/cart', verifyToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        
-        let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
-        let cartId;
-        
-        if (cartResult.rows.length === 0) {
-            const newCart = await query('INSERT INTO cart (user_id) VALUES ($1) RETURNING id', [userId]);
-            cartId = newCart.rows[0].id;
-        } else {
-            cartId = cartResult.rows[0].id;
-        }
-        
-        const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price, p.image_url, p.stock
-            FROM cart_items ci
-            JOIN products p ON ci.product_id = p.id
-            WHERE ci.cart_id = $1
-        `, [cartId]);
-        
-        let total = 0;
-        itemsResult.rows.forEach(item => {
-            total += parseFloat(item.price) * item.quantity;
-        });
-        
-        res.json({
-            cart_id: cartId,
-            items: itemsResult.rows,
-            total: total.toFixed(2),
-            item_count: itemsResult.rows.length
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Database error' });
-    }
-});
-
-// POST - Add item to cart
+// Cart API - Add to cart (works for both products and suits)
 app.post('/api/cart/add', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { product_id, quantity = 1 } = req.body;
     
-    if (!product_id) {
-        return res.status(400).json({ error: 'Product ID is required' });
-    }
+    if (!product_id) return res.status(400).json({ error: 'Product ID required' });
     
     try {
-        // Check if product exists in either products or suits table
+        // Check products table
         let product = null;
-        let productResult = await query('SELECT * FROM products WHERE id = $1', [product_id]);
+        const productResult = await query('SELECT * FROM products WHERE id = $1', [product_id]);
         if (productResult.rows.length > 0) {
             product = productResult.rows[0];
         } else {
-            // Check suits table
             const suitResult = await query('SELECT * FROM suits WHERE id = $1', [product_id]);
             if (suitResult.rows.length > 0) {
-                product = suitResult.rows[0];
-                // Map suit fields to product fields
-                product = {
-                    id: product.id,
-                    name: product.product_name,
-                    price: product.price,
-                    stock: product.stock_quantity,
-                    image_url: product.image_url
-                };
+                const s = suitResult.rows[0];
+                product = { id: s.id, name: s.product_name, price: s.price, stock: s.stock_quantity, image_url: s.image_url };
             }
         }
         
-        if (!product) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
+        if (!product) return res.status(404).json({ error: 'Product not found' });
+        if (product.stock < quantity) return res.status(400).json({ error: 'Not enough stock' });
         
-        if (product.stock < quantity) {
-            return res.status(400).json({ error: 'Not enough stock available' });
-        }
-        
-        // Get or create cart
         let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
         let cartId;
-        
         if (cartResult.rows.length === 0) {
             const newCart = await query('INSERT INTO cart (user_id) VALUES ($1) RETURNING id', [userId]);
             cartId = newCart.rows[0].id;
-        } else {
-            cartId = cartResult.rows[0].id;
-        }
+        } else { cartId = cartResult.rows[0].id; }
         
-        // Check if item already in cart
         const existingResult = await query(
             'SELECT * FROM cart_items WHERE cart_id = $1 AND product_id = $2',
-            [cartId, product_id]
-        );
+            [cartId, product_id]);
         
         if (existingResult.rows.length > 0) {
             const newQuantity = existingResult.rows[0].quantity + quantity;
-            await query(
-                'UPDATE cart_items SET quantity = $1 WHERE id = $2',
-                [newQuantity, existingResult.rows[0].id]
-            );
-            res.json({ 
-                success: true, 
-                message: 'Cart updated',
-                item: { ...existingResult.rows[0], quantity: newQuantity }
-            });
+            await query('UPDATE cart_items SET quantity = $1 WHERE id = $2',
+                [newQuantity, existingResult.rows[0].id]);
+            res.json({ success: true, message: 'Cart updated' });
         } else {
-            const result = await query(
-                'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3) RETURNING id',
-                [cartId, product_id, quantity]
-            );
-            res.json({ 
-                success: true, 
-                message: 'Item added to cart',
-                item_id: result.rows[0].id
-            });
+            await query('INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
+                [cartId, product_id, quantity]);
+            res.json({ success: true, message: 'Item added to cart' });
         }
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Database error' });
+        console.error(err); res.status(500).json({ error: 'DB error' });
     }
 });
 
-// PUT - Update cart item quantity
+// Get cart
+app.get('/api/cart', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
+        let cartId;
+        if (cartResult.rows.length === 0) {
+            const newCart = await query('INSERT INTO cart (user_id) VALUES ($1) RETURNING id', [userId]);
+            cartId = newCart.rows[0].id;
+        } else { cartId = cartResult.rows[0].id; }
+        
+        const itemsResult = await query(`
+            SELECT ci.*, p.name, p.price, p.image_url, p.stock
+            FROM cart_items ci LEFT JOIN products p ON ci.product_id = p.id
+            WHERE ci.cart_id = $1`, [cartId]);
+        
+        let total = 0;
+        itemsResult.rows.forEach(item => { total += parseFloat(item.price || 0) * item.quantity; });
+        
+        res.json({ cart_id: cartId, items: itemsResult.rows, total: total.toFixed(2), item_count: itemsResult.rows.length });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'DB error' }); }
+});
+
+// Update cart item
 app.put('/api/cart/update/:itemId', verifyToken, async (req, res) => {
-    const itemId = req.params.itemId;
     const { quantity } = req.body;
-    const userId = req.user.id;
-    
-    if (!quantity || quantity < 1) {
-        return res.status(400).json({ error: 'Quantity must be at least 1' });
-    }
-    
+    if (!quantity || quantity < 1) return res.status(400).json({ error: 'Quantity must be >= 1' });
     try {
         const result = await query(`
-            UPDATE cart_items 
-            SET quantity = $1 
-            WHERE id = $2 
-            AND cart_id IN (SELECT id FROM cart WHERE user_id = $3)
-            RETURNING id
-        `, [quantity, itemId, userId]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-        res.json({ success: true, message: 'Cart updated' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Database error' });
-    }
+            UPDATE cart_items SET quantity = $1 WHERE id = $2
+            AND cart_id IN (SELECT id FROM cart WHERE user_id = $3) RETURNING id`,
+            [quantity, req.params.itemId, req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+        res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'DB error' }); }
 });
 
-// DELETE - Remove item from cart
+// Remove from cart
 app.delete('/api/cart/remove/:itemId', verifyToken, async (req, res) => {
-    const itemId = req.params.itemId;
-    const userId = req.user.id;
-    
     try {
         const result = await query(`
-            DELETE FROM cart_items 
-            WHERE id = $1 
-            AND cart_id IN (SELECT id FROM cart WHERE user_id = $2)
-            RETURNING id
-        `, [itemId, userId]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-        res.json({ success: true, message: 'Item removed from cart' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Database error' });
-    }
+            DELETE FROM cart_items WHERE id = $1
+            AND cart_id IN (SELECT id FROM cart WHERE user_id = $2) RETURNING id`,
+            [req.params.itemId, req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+        res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'DB error' }); }
 });
 
-// POST - Checkout
+// Checkout
 app.post('/api/checkout', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { shipping_address, payment_method = 'cash_on_delivery' } = req.body;
-    
-    if (!shipping_address) {
-        return res.status(400).json({ error: 'Shipping address is required' });
-    }
+    if (!shipping_address) return res.status(400).json({ error: 'Shipping address required' });
     
     try {
         const cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
-        if (cartResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Cart not found' });
-        }
+        if (cartResult.rows.length === 0) return res.status(404).json({ error: 'Cart not found' });
         const cartId = cartResult.rows[0].id;
         
         const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price, p.stock
-            FROM cart_items ci
-            JOIN products p ON ci.product_id = p.id
-            WHERE ci.cart_id = $1
-        `, [cartId]);
+            SELECT ci.*, p.name, p.price FROM cart_items ci
+            LEFT JOIN products p ON ci.product_id = p.id WHERE ci.cart_id = $1`, [cartId]);
         
-        if (itemsResult.rows.length === 0) {
-            return res.status(400).json({ error: 'Cart is empty' });
-        }
+        if (itemsResult.rows.length === 0) return res.status(400).json({ error: 'Cart empty' });
         
         let subtotal = 0;
-        itemsResult.rows.forEach(item => {
-            subtotal += parseFloat(item.price) * item.quantity;
-        });
-        
+        itemsResult.rows.forEach(item => { subtotal += parseFloat(item.price || 0) * item.quantity; });
         const tax = subtotal * 0.15;
         const shipping = subtotal > 500 ? 0 : 50;
         const total = subtotal + tax + shipping;
-        
         const orderId = uuidv4();
-        const estimatedDelivery = new Date();
-        estimatedDelivery.setDate(estimatedDelivery.getDate() + 5);
         
-        const client = await pool.connect();
+        await query(`INSERT INTO orders (id, user_id, total_amount, status, shipping_address, payment_method) 
+            VALUES ($1, $2, $3, 'pending', $4, $5)`,
+            [orderId, userId, total.toFixed(2), shipping_address, payment_method]);
         
-        try {
-            await client.query('BEGIN');
-            
-            await client.query(
-                `INSERT INTO orders (id, user_id, total_amount, status, shipping_address, payment_method, estimated_delivery) 
-                 VALUES ($1, $2, $3, 'pending', $4, $5, $6)`,
-                [orderId, userId, total.toFixed(2), shipping_address, payment_method, estimatedDelivery]
-            );
-            
-            for (const item of itemsResult.rows) {
-                await client.query(
-                    `INSERT INTO order_items (order_id, product_id, product_name, quantity, price) 
-                     VALUES ($1, $2, $3, $4, $5)`,
-                    [orderId, item.product_id, item.name, item.quantity, item.price]
-                );
-                
-                const newStock = item.stock - item.quantity;
-                await client.query(
-                    'UPDATE products SET stock = $1 WHERE id = $2',
-                    [newStock, item.product_id]
-                );
-            }
-            
-            await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cartId]);
-            
-            await client.query('COMMIT');
-            
-            res.status(201).json({
-                success: true,
-                order_id: orderId,
-                total: total.toFixed(2),
-                items: itemsResult.rows,
-                estimated_delivery: estimatedDelivery,
-                message: 'Order placed successfully!'
-            });
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
+        for (const item of itemsResult.rows) {
+            await query(`INSERT INTO order_items (order_id, product_id, product_name, quantity, price) 
+                VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, item.product_id, item.name, item.quantity, item.price]);
         }
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to place order' });
-    }
+        
+        await query('DELETE FROM cart_items WHERE cart_id = $1', [cartId]);
+        
+        res.status(201).json({ success: true, order_id: orderId, total: total.toFixed(2) });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Failed to place order' }); }
 });
 
-// ============================================================
-// HEALTH CHECK
-// ============================================================
+// Wishlist API
+app.post('/api/wishlist/add', verifyToken, async (req, res) => {
+    try {
+        const { product_id } = req.body;
+        await query('INSERT INTO wishlist (user_id, product_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [req.user.id, product_id]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
+app.delete('/api/wishlist/remove/:productId', verifyToken, async (req, res) => {
+    try {
+        await query('DELETE FROM wishlist WHERE user_id = $1 AND product_id = $2',
+            [req.user.id, req.params.productId]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Health check
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        message: 'Explore Essence API is running',
-        timestamp: new Date().toISOString()
-    });
+    res.json({ status: 'OK', message: 'Explore Essence running', timestamp: new Date().toISOString() });
 });
 
-// ============================================================
-// 404 HANDLER
-// ============================================================
-
+// 404
 app.use((req, res) => {
     const user = getUserFromCookie(req);
-    res.status(404).render('pages/404', { 
-        title: 'Page Not Found',
-        user: user 
-    });
+    res.status(404).render('pages/404', { title: 'Not Found', user });
 });
 
 // ============================================================
-// START SERVER
+// START
 // ============================================================
 
 app.listen(PORT, () => {
-    console.log(`✨ Explore Essence running at http://localhost:${PORT}`);
-    console.log(`📦 API available at http://localhost:${PORT}/api/products`);
-    console.log(`🔐 Auth available at http://localhost:${PORT}/api/auth`);
-    console.log(`🛒 Cart available at http://localhost:${PORT}/api/cart`);
-    console.log(`👑 Admin dashboard at http://localhost:${PORT}/admin`);
-    console.log(`🗄️ Database at http://localhost:${PORT}/database`);
-    console.log(`👔 Suits at http://localhost:${PORT}/suits`);
-    console.log(`❤️  Health check at http://localhost:${PORT}/api/health`);
+    console.log(`✨ Explore Essence: http://localhost:${PORT}`);
+    console.log(`👔 Suits: /suits | 💐 Perfumes: /perfumes | 👔 Ties: /ties`);
+    console.log(`👖 Chinos: /chinos | 👕 Shirts: /shirts | 🧦 Trousers: /trousers`);
 });
 
 module.exports = { pool };

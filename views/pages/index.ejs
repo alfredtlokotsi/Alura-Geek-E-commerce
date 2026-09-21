@@ -13,7 +13,6 @@
     <%- include('../partials/header', { user: locals.user }) %>
     
     <main>
-        <!-- HERO BANNER -->
         <section class="hero">
             <div class="container">
                 <div class="hero-content">
@@ -28,22 +27,22 @@
             </div>
         </section>
 
-        <!-- CATEGORIES -->
         <section class="categories-section">
             <div class="container">
                 <h2 class="section-title">Browse <span class="gold">Categories</span></h2>
                 <div class="category-grid">
                     <%
                         const categories = [
-                            { slug: 'perfumes', name: 'Perfumes', icon: 'fa-perfume', color: '#D4AF37' },
-                            { slug: 'fans', name: 'Fans', icon: 'fa-fan', color: '#3498db' },
-                            { slug: 'ties', name: 'Ties', icon: 'fa-tie', color: '#e74c3c' },
+                            { slug: 'perfumes', name: 'Perfumes', icon: 'fa-spray-can-sparkles', color: '#D4AF37' },
+                            { slug: 'ties', name: 'Ties', icon: 'fa-user-tie', color: '#e74c3c' },
                             { slug: 'suits', name: 'Suits', icon: 'fa-user-tie', color: '#2ecc71' },
-                            { slug: 'tools', name: 'Tools', icon: 'fa-tools', color: '#f39c12' }
+                            { slug: 'chinos', name: 'Chinos', icon: 'fa-person', color: '#3498db' },
+                            { slug: 'shirts', name: 'Shirts', icon: 'fa-shirt', color: '#f39c12' },
+                            { slug: 'trousers', name: 'Trousers', icon: 'fa-socks', color: '#9b59b6' }
                         ];
                         categories.forEach(cat => {
                     %>
-                        <a href="/category/<%= cat.slug %>" class="category-card">
+                        <a href="/<%= cat.slug %>" class="category-card">
                             <div class="category-icon" style="color: <%= cat.color %>;">
                                 <i class="fas <%= cat.icon %>"></i>
                             </div>
@@ -55,7 +54,6 @@
             </div>
         </section>
 
-        <!-- FEATURED PRODUCTS -->
         <section class="featured">
             <div class="container">
                 <h2 class="section-title">Featured <span class="gold">Products</span></h2>
@@ -69,7 +67,7 @@
                                      onerror="this.src='/images/placeholder.jpg'">
                                 <div class="info">
                                     <h3><%= product.name %></h3>
-                                    <p class="price">R <%= parseFloat(product.price).toFixed(2) %></p>
+                                    <p class="price">R <%= product.price ? parseFloat(product.price).toFixed(2) : '0.00' %></p>
                                     <div class="product-actions">
                                         <button class="btn btn-primary btn-sm" onclick="addToCart(<%= product.id %>)">
                                             <i class="fas fa-cart-plus"></i> Add
@@ -88,7 +86,6 @@
             </div>
         </section>
 
-        <!-- NEW ARRIVALS -->
         <section class="new-arrivals">
             <div class="container">
                 <h2 class="section-title">New <span class="gold">Arrivals</span></h2>
@@ -101,7 +98,7 @@
                                      onerror="this.src='/images/placeholder.jpg'">
                                 <div class="info">
                                     <h3><%= product.name %></h3>
-                                    <p class="price">R <%= parseFloat(product.price).toFixed(2) %></p>
+                                    <p class="price">R <%= product.price ? parseFloat(product.price).toFixed(2) : '0.00' %></p>
                                     <button class="btn btn-primary btn-sm" onclick="addToCart(<%= product.id %>)">
                                         <i class="fas fa-cart-plus"></i> Add to Cart
                                     </button>

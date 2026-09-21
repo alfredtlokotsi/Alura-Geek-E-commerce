@@ -8,389 +8,266 @@ const router = express.Router();
 
 module.exports = (pool) => {
   
-  // --- SIGNUP ---
-  router.post('/signup', [
-    body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
-    body('email').isEmail().withMessage('Please enter a valid email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
-  ], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ error: errors.array()[0].msg });
-    }
-
-    const { name, email, password, role = 'user' } = req.body;
-
-    try {
-      // Check if user exists
-      const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      if (existing.rows.length > 0) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      const userRole = (role === 'admin') ? 'admin' : 'user';
-
-      const result = await pool.query(
-        `INSERT INTO users (name, email, password, role, created_at) 
-         VALUES ($1, $2, $3, $4, NOW()) RETURNING id, name, email, role`,
-        [name, email, hashedPassword, userRole]
-      );
-
-      const user = result.rows[0];
-
-      const token = jwt.sign(
-        { id: user.id, email: user.email, name: user.name, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRE || '7d' }
-      );
-
-      // Set cookie for page loads
-      res.cookie('token', token, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
-        path: '/'
-      });
-
-      res.status(201).json({
-        success: true,
-        token,
-        user: { id: user.id, name: user.name, email: user.email, role: user.role }
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
-
-  // --- LOGIN ---
-  router.post('/login', [
-    body('email').isEmail().withMessage('Please enter a valid email'),
-    body('password').notEmpty().withMessage('Password is required')
-  ], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ error: errors.array()[0].msg });
-    }
-
-    const { email, password } = req.body;
-
-    try {
-      const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      if (result.rows.length === 0) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-
-      const user = result.rows[0];
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-
-      const token = jwt.sign(
-        { id: user.id, email: user.email, name: user.name, role: user.role || 'user' },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRE || '7d' }
-      );
-
-      // Set cookie for page loads
-      res.cookie('token', token, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
-        path: '/'
-      });
-
-      res.json({
-        success: true,
-        token,
-        user: { id: user.id, name: user.name, email: user.email, role: user.role || 'user' }
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
-
-  // --- GET CURRENT USER ---
-  router.get('/me', verifyToken, async (req, res) => {
-    try {
-      const result = await pool.query(
-        'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
-        [req.user.id]
-      );
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json({ user: result.rows[0] });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
-
-  // --- LOGOUT ---
-  router.post('/logout', (req, res) => {
-    res.clearCookie('token');
-    res.json({ success: true, message: 'Logged out successfully' });
-  });
-
-  // ============================================================
-  // ADMIN ONLY ROUTES
-  // ============================================================
-
-  router.get('/admin/users', verifyToken, verifyAdmin, async (req, res) => {
-    try {
-      const result = await pool.query(
-        'SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC'
-      );
-      res.json({ success: true, count: result.rows.length, users: result.rows });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
-
-  router.get('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
-    try {
-      const result = await pool.query(
-        'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
-        [req.params.id]
-      );
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json({ user: result.rows[0] });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
-
-  router.put('/admin/users/:id/role', verifyToken, verifyAdmin, [
-    body('role').isIn(['user', 'admin']).withMessage('Role must be "user" or "admin"')
-  ], async (req, res) => {
-    const userId = req.params.id;
-    const { role } = req.body;
-
-    if (parseInt(userId) === req.user.id) {
-      return res.status(400).json({ error: 'You cannot change your own role' });
-    }
-
-    try {
-      const result = await pool.query(
-        'UPDATE users SET role = $1 WHERE id = $2 RETURNING id',
-        [role, userId]
-      );
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json({ success: true, message: `User role updated to ${role}` });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
-
-  router.delete('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
-    const userId = req.params.id;
-
-    if (parseInt(userId) === req.user.id) {
-      return res.status(400).json({ error: 'You cannot delete your own account' });
-    }
-
-    try {
-      const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json({ success: true, message: 'User deleted successfully' });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
-
-  router.post('/admin/create', verifyToken, verifyAdmin, [
-    body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
-    body('email').isEmail().withMessage('Please enter a valid email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
-  ], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ error: errors.array()[0].msg });
-    }
-
-    const { name, email, password } = req.body;
-
-    try {
-      const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      if (existing.rows.length > 0) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      const result = await pool.query(
-        `INSERT INTO users (name, email, password, role, created_at) 
-         VALUES ($1, $2, $3, 'admin', NOW()) RETURNING id, name, email, role`,
-        [name, email, hashedPassword]
-      );
-
-      res.status(201).json({
-        success: true,
-        message: 'Admin account created successfully',
-        user: result.rows[0]
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
-  // Add at the end of your auth.js file, before the return router;
-
-// --- UPDATE PROFILE ---
-router.put('/update-profile', verifyToken, [
-    body('name').optional().trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
-    body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
-], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ error: errors.array()[0].msg });
-    }
-
-    const { name, password } = req.body;
-    const userId = req.user.id;
-
-    try {
-        let updateQuery = 'UPDATE users SET ';
-        const params = [];
-        let paramCount = 1;
-
-        if (name) {
-            updateQuery += `name = $${paramCount}, `;
-            params.push(name);
-            paramCount++;
+    // --- SIGNUP ---
+    router.post('/signup', [
+        body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
+        body('email').isEmail().withMessage('Please enter a valid email'),
+        body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+    ], async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: errors.array()[0].msg });
         }
 
-        if (password) {
+        const { name, email, password, role = 'user' } = req.body;
+
+        try {
+            const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+            if (existing.rows.length > 0) {
+                return res.status(400).json({ error: 'Email already registered' });
+            }
+
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
-            updateQuery += `password = $${paramCount}, `;
-            params.push(hashedPassword);
-            paramCount++;
+
+            const userRole = (role === 'admin') ? 'admin' : 'user';
+
+            const result = await pool.query(
+                `INSERT INTO users (name, email, password, role, created_at) 
+                 VALUES ($1, $2, $3, $4, NOW()) RETURNING id, name, email, role`,
+                [name, email, hashedPassword, userRole]
+            );
+
+            const user = result.rows[0];
+
+            const token = jwt.sign(
+                { id: user.id, email: user.email, name: user.name, role: user.role },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRE || '7d' }
+            );
+
+            res.cookie('token', token, {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                sameSite: 'lax',
+                path: '/'
+            });
+
+            res.status(201).json({
+                success: true,
+                token,
+                user: { id: user.id, name: user.name, email: user.email, role: user.role }
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Server error' });
+        }
+    });
+
+    // --- LOGIN ---
+    router.post('/login', [
+        body('email').isEmail().withMessage('Please enter a valid email'),
+        body('password').notEmpty().withMessage('Password is required')
+    ], async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: errors.array()[0].msg });
         }
 
-        // Remove trailing comma and space
-        updateQuery = updateQuery.slice(0, -2);
-        updateQuery += ` WHERE id = $${paramCount} RETURNING id, name, email, role`;
-        params.push(userId);
+        const { email, password } = req.body;
 
-        const result = await pool.query(updateQuery, params);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
+        try {
+            const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+            if (result.rows.length === 0) {
+                return res.status(401).json({ error: 'Invalid email or password' });
+            }
+
+            const user = result.rows[0];
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ error: 'Invalid email or password' });
+            }
+
+            const token = jwt.sign(
+                { id: user.id, email: user.email, name: user.name, role: user.role || 'user' },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRE || '7d' }
+            );
+
+            res.cookie('token', token, {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                sameSite: 'lax',
+                path: '/'
+            });
+
+            res.json({
+                success: true,
+                token,
+                user: { id: user.id, name: user.name, email: user.email, role: user.role || 'user' }
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Server error' });
+        }
+    });
+
+    // --- GET CURRENT USER ---
+    router.get('/me', verifyToken, async (req, res) => {
+        try {
+            const result = await pool.query(
+                'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
+                [req.user.id]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            res.json({ user: result.rows[0] });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Database error' });
+        }
+    });
+
+    // --- LOGOUT ---
+    router.post('/logout', (req, res) => {
+        res.clearCookie('token');
+        res.json({ success: true, message: 'Logged out successfully' });
+    });
+
+    // --- UPDATE PROFILE ---
+    router.put('/update-profile', verifyToken, async (req, res) => {
+        const { name, password } = req.body;
+        const userId = req.user.id;
+
+        try {
+            let updateQuery = 'UPDATE users SET ';
+            const params = [];
+            let paramCount = 1;
+
+            if (name) {
+                updateQuery += `name = $${paramCount}, `;
+                params.push(name);
+                paramCount++;
+            }
+
+            if (password) {
+                const salt = await bcrypt.genSalt(10);
+                const hashedPassword = await bcrypt.hash(password, salt);
+                updateQuery += `password = $${paramCount}, `;
+                params.push(hashedPassword);
+                paramCount++;
+            }
+
+            updateQuery = updateQuery.slice(0, -2);
+            updateQuery += ` WHERE id = $${paramCount} RETURNING id, name, email, role`;
+            params.push(userId);
+
+            const result = await pool.query(updateQuery, params);
+            res.json({ success: true, message: 'Profile updated', user: result.rows[0] });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Server error' });
+        }
+    });
+
+    // ============================================================
+    // ADMIN ROUTES
+    // ============================================================
+
+    router.get('/admin/users', verifyToken, verifyAdmin, async (req, res) => {
+        try {
+            const result = await pool.query(
+                'SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC'
+            );
+            res.json({ success: true, count: result.rows.length, users: result.rows });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Database error' });
+        }
+    });
+
+    router.put('/admin/users/:id/role', verifyToken, verifyAdmin, async (req, res) => {
+        const userId = req.params.id;
+        const { role } = req.body;
+
+        if (parseInt(userId) === req.user.id) {
+            return res.status(400).json({ error: 'You cannot change your own role' });
         }
 
-        res.json({ 
-            success: true, 
-            message: 'Profile updated successfully',
-            user: result.rows[0]
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
+        try {
+            const result = await pool.query(
+                'UPDATE users SET role = $1 WHERE id = $2 RETURNING id',
+                [role, userId]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            res.json({ success: true, message: `User role updated to ${role}` });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Database error' });
+        }
+    });
 
-// --- FORGOT PASSWORD ---
-router.post('/forgot-password', [
-    body('email').isEmail().withMessage('Please enter a valid email')
-], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ error: errors.array()[0].msg });
-    }
+    router.delete('/admin/users/:id', verifyToken, verifyAdmin, async (req, res) => {
+        const userId = req.params.id;
 
-    const { email } = req.body;
-
-    try {
-        const result = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Email not found' });
+        if (parseInt(userId) === req.user.id) {
+            return res.status(400).json({ error: 'You cannot delete your own account' });
         }
 
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
+        try {
+            const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            res.json({ success: true, message: 'User deleted successfully' });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Database error' });
+        }
+    });
 
-        await pool.query(
-            'INSERT INTO password_resets (email, token, expires_at) VALUES ($1, $2, $3)',
-            [email, token, expiresAt]
-        );
-
-        // Send reset email (implement nodemailer here)
-        // For now, return token for testing
-        res.json({ 
-            success: true, 
-            message: 'Password reset link sent to your email',
-            token: token // Remove this in production
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// --- RESET PASSWORD ---
-router.post('/reset-password', [
-    body('token').notEmpty().withMessage('Token is required'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
-], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ error: errors.array()[0].msg });
-    }
-
-    const { token, password } = req.body;
-
-    try {
-        const result = await pool.query(
-            'SELECT email, expires_at FROM password_resets WHERE token = $1',
-            [token]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(400).json({ error: 'Invalid or expired token' });
+    router.post('/admin/create', verifyToken, verifyAdmin, [
+        body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
+        body('email').isEmail().withMessage('Please enter a valid email'),
+        body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+    ], async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: errors.array()[0].msg });
         }
 
-        const { email, expires_at } = result.rows[0];
-        if (new Date() > new Date(expires_at)) {
-            return res.status(400).json({ error: 'Token expired' });
+        const { name, email, password } = req.body;
+
+        try {
+            const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+            if (existing.rows.length > 0) {
+                return res.status(400).json({ error: 'Email already registered' });
+            }
+
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+
+            const result = await pool.query(
+                `INSERT INTO users (name, email, password, role, created_at) 
+                 VALUES ($1, $2, $3, 'admin', NOW()) RETURNING id, name, email, role`,
+                [name, email, hashedPassword]
+            );
+
+            res.status(201).json({
+                success: true,
+                message: 'Admin account created',
+                user: result.rows[0]
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Server error' });
         }
+    });
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        await pool.query(
-            'UPDATE users SET password = $1 WHERE email = $2',
-            [hashedPassword, email]
-        );
-
-        await pool.query('DELETE FROM password_resets WHERE token = $1', [token]);
-
-        res.json({ success: true, message: 'Password reset successfully' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-  return router;
+    return router;
 };

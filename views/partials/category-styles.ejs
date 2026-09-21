@@ -1,0 +1,29 @@
+<style>
+    .category-hero { padding: 60px 0; text-align: center; background: linear-gradient(135deg, #0D0D0D 0%, #1A1A1A 100%); border-bottom: 1px solid #2D2D2D; margin-bottom: 30px; }
+    .category-hero h1 { font-size: 3rem; color: #FFFFFF; }
+    .category-hero h1 .gold { color: #D4AF37; }
+    .category-hero p { color: #AAAAAA; font-size: 1.2rem; max-width: 600px; margin: 10px auto 0; }
+    .category-hero .category-icon { font-size: 3rem; color: #D4AF37; margin-bottom: 15px; }
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 30px; margin: 40px 0; }
+    .product-card { background: linear-gradient(145deg, #1A1A1A, #0D0D0D); border-radius: 12px; overflow: hidden; border: 1px solid #2D2D2D; transition: all 0.3s ease; position: relative; }
+    .product-card:hover { transform: translateY(-8px); border-color: #D4AF37; box-shadow: 0 12px 40px rgba(212, 175, 55, 0.15); }
+    .product-card .featured-badge { position: absolute; top: 10px; right: 10px; background: #D4AF37; color: #1A1A1A; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; z-index: 10; }
+    .product-card img { width: 100%; height: 220px; object-fit: cover; }
+    .product-card .info { padding: 20px; text-align: center; }
+    .product-card .info h3 { color: #FFFFFF; font-size: 1.1rem; margin-bottom: 8px; }
+    .product-card .info .description { color: #888; font-size: 0.85rem; margin-bottom: 10px; }
+    .product-card .info .price { color: #D4AF37; font-size: 1.4rem; font-weight: 700; margin: 10px 0 15px; }
+    .product-card .info .stock { color: #888; font-size: 0.85rem; margin-bottom: 10px; }
+    .product-card .info .btn { width: 100%; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #888; font-size: 1.2rem; }
+    .nav-categories { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; padding: 15px 0; background: #0D0D0D; border-bottom: 1px solid #2D2D2D; }
+    .nav-categories a { color: #888; text-decoration: none; padding: 8px 20px; border-radius: 20px; border: 1px solid #2D2D2D; transition: all 0.3s ease; font-size: 0.9rem; }
+    .nav-categories a:hover, .nav-categories a.active { color: #D4AF37; border-color: #D4AF37; background: rgba(212, 175, 55, 0.1); }
+    .nav-categories a i { margin-right: 8px; }
+    @media (max-width: 768px) {
+        .category-hero h1 { font-size: 2rem; }
+        .product-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        .nav-categories { gap: 8px; padding: 10px; }
+        .nav-categories a { padding: 6px 12px; font-size: 0.8rem; }
+    }
+</style>
