@@ -122,6 +122,12 @@ async function initDatabase() {
             image_url TEXT, featured INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
+        await query(`CREATE TABLE IF NOT EXISTS trousers (
+            id SERIAL PRIMARY KEY, type_code TEXT NOT NULL UNIQUE,
+            color_name TEXT NOT NULL, price DECIMAL(10,2) NOT NULL DEFAULT 350.00,
+            description TEXT, image_filename TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+
         console.log('✅ Tables initialized');
 
         // Categories
@@ -194,8 +200,8 @@ app.get('/products', async (req, res) => {
     } catch (err) { console.error(err); res.status(500).send('DB error'); }
 });
 
-// Category Pages - All use same pattern
-const categories = ['perfumes', 'ties', 'chinos', 'shirts', 'trousers'];
+// Category Pages — excludes 'trousers' (has its own dedicated table)
+const categories = ['perfumes', 'ties', 'chinos', 'shirts'];
 categories.forEach(slug => {
     app.get(`/${slug}`, async (req, res) => {
         try {
@@ -210,7 +216,7 @@ categories.forEach(slug => {
     });
 });
 
-// Suits (separate table)
+// Suits (dedicated table)
 app.get('/suits', async (req, res) => {
     try {
         const user = getUserFromCookie(req);
@@ -226,6 +232,22 @@ app.get('/suits/:id', async (req, res) => {
         if (result.rows.length === 0) return res.status(404).send('Suit not found');
         res.render('pages/suit-detail', { title: result.rows[0].product_name, user, suit: result.rows[0] });
     } catch (err) { console.error(err); res.status(500).send('DB error'); }
+});
+
+// Trousers (dedicated table)
+app.get('/trousers', async (req, res) => {
+    try {
+        const user = getUserFromCookie(req);
+        const result = await query('SELECT * FROM trousers ORDER BY id');
+        res.render('pages/trousers', { 
+            title: 'Trousers', 
+            user, 
+            trousers: result.rows 
+        });
+    } catch (err) { 
+        console.error(err); 
+        res.status(500).send('DB error'); 
+    }
 });
 
 // Product Detail
@@ -277,9 +299,15 @@ app.get('/cart', verifyToken, async (req, res) => {
         } else { cartId = cartResult.rows[0].id; }
 
         const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price, p.image_url, p.stock
+            SELECT ci.*, 
+                COALESCE(p.name, s.product_name, t.color_name || ' ' || t.type_code) as name,
+                COALESCE(p.price, s.price, t.price) as price,
+                COALESCE(p.image_url, s.image_url, 'trousers/' || t.image_filename) as image_url,
+                COALESCE(p.stock, s.stock_quantity, 10) as stock
             FROM cart_items ci
             LEFT JOIN products p ON ci.product_id = p.id
+            LEFT JOIN suits s ON ci.product_id = s.id AND p.id IS NULL
+            LEFT JOIN trousers t ON ci.product_id = t.id AND p.id IS NULL AND s.id IS NULL
             WHERE ci.cart_id = $1`, [cartId]);
 
         let subtotal = 0;
@@ -303,8 +331,14 @@ app.get('/checkout', verifyToken, async (req, res) => {
         const cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
         if (cartResult.rows.length === 0) return res.redirect('/cart');
         const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price, p.image_url FROM cart_items ci
+            SELECT ci.*, 
+                COALESCE(p.name, s.product_name, t.color_name || ' ' || t.type_code) as name,
+                COALESCE(p.price, s.price, t.price) as price,
+                COALESCE(p.image_url, s.image_url, 'trousers/' || t.image_filename) as image_url
+            FROM cart_items ci
             LEFT JOIN products p ON ci.product_id = p.id
+            LEFT JOIN suits s ON ci.product_id = s.id AND p.id IS NULL
+            LEFT JOIN trousers t ON ci.product_id = t.id AND p.id IS NULL AND s.id IS NULL
             WHERE ci.cart_id = $1`, [cartResult.rows[0].id]);
         if (itemsResult.rows.length === 0) return res.redirect('/cart');
 
@@ -388,7 +422,6 @@ app.get('/about', (req, res) => {
 // API ROUTES
 // ============================================================
 
-// Products API
 app.get('/api/products', async (req, res) => {
     try {
         const result = await query('SELECT * FROM products ORDER BY created_at DESC');
@@ -396,7 +429,6 @@ app.get('/api/products', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Suits API
 app.get('/api/suits', async (req, res) => {
     try {
         const result = await query('SELECT * FROM suits ORDER BY featured DESC, created_at DESC');
@@ -404,7 +436,14 @@ app.get('/api/suits', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Cart API - Add to cart (works for both products and suits)
+app.get('/api/trousers', async (req, res) => {
+    try {
+        const result = await query('SELECT * FROM trousers ORDER BY id');
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Cart API - Add to cart (works across products, suits, and trousers)
 app.post('/api/cart/add', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { product_id, quantity = 1 } = req.body;
@@ -412,22 +451,38 @@ app.post('/api/cart/add', verifyToken, async (req, res) => {
     if (!product_id) return res.status(400).json({ error: 'Product ID required' });
     
     try {
-        // Check products table
         let product = null;
+        
+        // Check products table
         const productResult = await query('SELECT * FROM products WHERE id = $1', [product_id]);
         if (productResult.rows.length > 0) {
             product = productResult.rows[0];
         } else {
+            // Check suits table
             const suitResult = await query('SELECT * FROM suits WHERE id = $1', [product_id]);
             if (suitResult.rows.length > 0) {
                 const s = suitResult.rows[0];
                 product = { id: s.id, name: s.product_name, price: s.price, stock: s.stock_quantity, image_url: s.image_url };
+            } else {
+                // Check trousers table
+                const trouserResult = await query('SELECT * FROM trousers WHERE id = $1', [product_id]);
+                if (trouserResult.rows.length > 0) {
+                    const t = trouserResult.rows[0];
+                    product = { 
+                        id: t.id, 
+                        name: `${t.color_name} ${t.type_code}`, 
+                        price: t.price, 
+                        stock: 10,
+                        image_url: `trousers/${t.image_filename}` 
+                    };
+                }
             }
         }
         
         if (!product) return res.status(404).json({ error: 'Product not found' });
         if (product.stock < quantity) return res.status(400).json({ error: 'Not enough stock' });
         
+        // Get or create cart
         let cartResult = await query('SELECT id FROM cart WHERE user_id = $1', [userId]);
         let cartId;
         if (cartResult.rows.length === 0) {
@@ -435,6 +490,7 @@ app.post('/api/cart/add', verifyToken, async (req, res) => {
             cartId = newCart.rows[0].id;
         } else { cartId = cartResult.rows[0].id; }
         
+        // Check if item already in cart
         const existingResult = await query(
             'SELECT * FROM cart_items WHERE cart_id = $1 AND product_id = $2',
             [cartId, product_id]);
@@ -466,8 +522,15 @@ app.get('/api/cart', verifyToken, async (req, res) => {
         } else { cartId = cartResult.rows[0].id; }
         
         const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price, p.image_url, p.stock
-            FROM cart_items ci LEFT JOIN products p ON ci.product_id = p.id
+            SELECT ci.*, 
+                COALESCE(p.name, s.product_name, t.color_name || ' ' || t.type_code) as name,
+                COALESCE(p.price, s.price, t.price) as price,
+                COALESCE(p.image_url, s.image_url, 'trousers/' || t.image_filename) as image_url,
+                COALESCE(p.stock, s.stock_quantity, 10) as stock
+            FROM cart_items ci
+            LEFT JOIN products p ON ci.product_id = p.id
+            LEFT JOIN suits s ON ci.product_id = s.id AND p.id IS NULL
+            LEFT JOIN trousers t ON ci.product_id = t.id AND p.id IS NULL AND s.id IS NULL
             WHERE ci.cart_id = $1`, [cartId]);
         
         let total = 0;
@@ -515,8 +578,14 @@ app.post('/api/checkout', verifyToken, async (req, res) => {
         const cartId = cartResult.rows[0].id;
         
         const itemsResult = await query(`
-            SELECT ci.*, p.name, p.price FROM cart_items ci
-            LEFT JOIN products p ON ci.product_id = p.id WHERE ci.cart_id = $1`, [cartId]);
+            SELECT ci.*, 
+                COALESCE(p.name, s.product_name, t.color_name || ' ' || t.type_code) as name,
+                COALESCE(p.price, s.price, t.price) as price
+            FROM cart_items ci
+            LEFT JOIN products p ON ci.product_id = p.id
+            LEFT JOIN suits s ON ci.product_id = s.id AND p.id IS NULL
+            LEFT JOIN trousers t ON ci.product_id = t.id AND p.id IS NULL AND s.id IS NULL
+            WHERE ci.cart_id = $1`, [cartId]);
         
         if (itemsResult.rows.length === 0) return res.status(400).json({ error: 'Cart empty' });
         

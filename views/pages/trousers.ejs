@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trousers | Explore Essence</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <%- include('../partials/category-styles') %>
+</head>
+<body>
+    <%- include('../partials/header', { user: locals.user }) %>
+    
+    <nav class="nav-categories">
+        <%
+            const navCategories = [
+                { slug: 'perfumes', name: 'Perfumes', icon: 'fa-spray-can-sparkles' },
+                { slug: 'ties', name: 'Ties', icon: 'fa-user-tie' },
+                { slug: 'suits', name: 'Suits', icon: 'fa-user-tie' },
+                { slug: 'chinos', name: 'Chinos', icon: 'fa-person' },
+                { slug: 'shirts', name: 'Shirts', icon: 'fa-shirt' },
+                { slug: 'trousers', name: 'Trousers', icon: 'fa-socks' }
+            ];
+            navCategories.forEach(cat => {
+                const isActive = cat.slug === 'trousers';
+        %>
+            <a href="/<%= cat.slug %>" class="<%= isActive ? 'active' : '' %>">
+                <i class="fas <%= cat.icon %>"></i> <%= cat.name %>
+            </a>
+        <% }); %>
+    </nav>
+    
+    <main>
+        <div class="category-hero">
+            <div class="container">
+                <div class="category-icon"><i class="fas fa-socks"></i></div>
+                <h1><span class="gold">Trousers</span></h1>
+                <p>Tailored trousers for a sharp look</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <% if (trousers && trousers.length > 0) { %>
+                <div class="product-grid">
+                    <% trousers.forEach(item => { %>
+                        <div class="product-card">
+                            <img src="/images/trousers/<%= item.image_filename %>" 
+                                 alt="<%= item.color_name %>" 
+                                 onerror="this.src='/images/placeholder.jpg'">
+                            <div class="info">
+                                <h3><%= item.color_name %></h3>
+                                <p class="description"><%= item.description %></p>
+                                <p class="price">R <%= item.price ? parseFloat(item.price).toFixed(2) : '0.00' %></p>
+                                <p class="stock" style="color: #888; font-size: 0.8rem; margin-bottom: 10px;">
+                                    Style Code: <strong style="color: #D4AF37;"><%= item.type_code %></strong>
+                                </p>
+                                <button class="btn btn-primary btn-sm" onclick="addToCart(<%= item.id %>)">
+                                    <i class="fas fa-cart-plus"></i> Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <div class="empty-state">
+                    <i class="fas fa-box-open" style="font-size: 3rem; display: block; margin-bottom: 15px; color: #555;"></i>
+                    No trousers available yet. Check back soon!
+                </div>
+            <% } %>
+        </div>
+    </main>
+
+    <%- include('../partials/footer', { user: locals.user }) %>
+</body>
+</html>
